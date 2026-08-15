@@ -1,0 +1,1408 @@
+# ============================================================
+# 🎓 SCHOOL MANAGEMENT PLATFORM — GraphQL Schema
+# Author  : Kassy Gloire Exaucé
+# Version : 1.0.0
+# Stack   : GraphQL Yoga + Node.js + PostgreSQL + Drizzle ORM
+# ============================================================
+
+
+# ============================================================
+# SCALARS
+# ============================================================
+
+scalar DateTime
+scalar JSON
+scalar Upload
+
+
+# ============================================================
+# ENUMS
+# ============================================================
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  TEACHER
+  PARENT
+  STUDENT
+}
+
+enum Gender {
+  M
+  F
+}
+
+enum ParentLink {
+  PERE
+  MERE
+  TUTEUR
+}
+
+enum LevelType {
+  PRIMAIRE
+  COLLEGE
+  LYCEE
+  UNIVERSITAIRE
+}
+
+enum EvalType {
+  DEVOIR
+  CONTROLE
+  EXAMEN
+  INTERRO
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  RETARD
+}
+
+enum PaymentStatus {
+  IMPAYE
+  PARTIEL
+  PAYE
+  ANNULE
+  EXONERE
+}
+
+enum PaymentMode {
+  ESPECES
+  MOBILE_MONEY
+  MOBILE_MONEY_SIMULE
+  VIREMENT
+  CHEQUE
+  AUTRE
+}
+
+enum TransactionChannel {
+  GUICHET
+  DISTANCE
+}
+
+enum TransactionStatus {
+  EN_ATTENTE
+  VALIDEE
+  ECHOUEE
+  ANNULEE
+}
+
+enum TransactionFailureCode {
+  SOLDE_INSUFFISANT
+  NUMERO_INVALIDE
+  ERREUR_RESEAU
+  DELAI_EXPIRE
+}
+
+enum BulletinStatus {
+  BROUILLON
+  PUBLIE
+  ARCHIVE
+}
+
+enum NotificationType {
+  PAIEMENT
+  ABSENCE
+  BULLETIN
+  ANNONCE
+  SYSTEME
+  MESSAGE
+}
+
+enum AnnouncementTarget {
+  ALL
+  PARENTS
+  TEACHERS
+  STUDENTS
+  ADMINS
+}
+
+enum MembershipStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum AuditAction {
+  # Paiements
+  PAYMENT_CREATED
+  PAYMENT_UPDATED
+  PAYMENT_EXONERATED
+  # Bulletins
+  BULLETIN_GENERATED
+  BULLETIN_UPDATED
+  BULLETIN_DELETED
+  BULLETIN_PUBLISHED
+  BULLETIN_ARCHIVED
+  # Utilisateurs
+  USER_CREATED
+  USER_UPDATED
+  USER_DELETED
+  USER_INVITED
+  USER_ROLE_CHANGED
+  # Notes
+  GRADE_CREATED
+  GRADE_UPDATED
+  GRADE_DELETED
+  # Présences
+  ATTENDANCE_MARKED
+  ATTENDANCE_UPDATED
+  # École
+  SCHOOL_CREATED
+  SCHOOL_UPDATED
+  CLASS_CREATED
+  CLASS_UPDATED
+  CLASS_DELETED
+  SUBJECT_CREATED
+  SUBJECT_UPDATED
+  SUBJECT_DELETED
+  CLASS_SUBJECT_ASSIGNED
+  CLASS_SUBJECT_UNASSIGNED
+  # Annonces
+  ANNOUNCEMENT_CREATED
+  ANNOUNCEMENT_DELETED
+}
+
+enum Trimester {
+  T1
+  T2
+  T3
+}
+
+enum Mention {
+  EXCELLENT
+  TRES_BIEN
+  BIEN
+  ASSEZ_BIEN
+  PASSABLE
+  INSUFFISANT
+}
+
+enum ExportType {
+  GRADES
+  ATTENDANCE
+  PAYMENTS
+  STUDENTS
+  AUDIT_LOG
+}
+
+
+# ============================================================
+# TYPES — CORE ENTITIES
+# ============================================================
+
+# ------ Profil Global ------
+type GlobalProfile {
+  id: ID!
+  code: String!              # USR-KGL-4F2A
+  nom: String!
+  prenom: String!
+  email: String!
+  phone: String
+  avatarUrl: String
+  isSuperAdmin: Boolean!
+  memberships: [SchoolMembership!]!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+# ------ School ------
+type School {
+  id: ID!
+  code: String!              # SCH-LKG-0001
+  nom: String!
+  logoUrl: String
+  adresse: String
+  telephone: String
+  anneeScolaire: String!
+  accentColor:   String     # 2024-2025
+  memberships: [SchoolMembership!]!
+  levels: [Level!]!
+  classes: [Class!]!
+  subjects: [Subject!]!
+  announcements: [Announcement!]!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+# ------ School Membership (lien profil <-> école <-> rôle) ------
+type SchoolMembership {
+  id: ID!
+  profile: GlobalProfile!
+  school: School!
+  role: Role!
+  code: String!              # TCH-KGL-4F2A
+  status: MembershipStatus!
+  joinedAt: DateTime!
+  # Relations selon le rôle
+  studentProfile: Student
+  classSubjects: [ClassSubject!]  # si TEACHER
+}
+
+# Annuaire des utilisateurs — vérification/rappel d'identifiants par
+# téléphone (SUPER_ADMIN : toute la plateforme sauf lui-même ; ADMIN :
+# uniquement enseignants/parents/élèves de son établissement). Ne
+# contient JAMAIS de mot de passe — voir adminResetPassword pour générer
+# un nouveau mot de passe à communiquer si la personne l'a perdu.
+type UserDirectoryEntry {
+  membershipId: ID!
+  code: String!            # identifiant de connexion
+  matricule: String        # uniquement pour un élève
+  nom: String!
+  prenom: String!
+  email: String!
+  phone: String
+  role: Role!
+  status: MembershipStatus!
+  schoolName: String!
+  joinedAt: DateTime!
+}
+
+# ------ Level ------
+type Level {
+  id: ID!
+  school: School!
+  nom: String!
+  type: LevelType!
+  ordre: Int!
+  classes: [Class!]!
+  # Activation/personnalisation du référentiel national (jamais une saisie libre)
+  nationalLevelId: ID
+  isActive: Boolean!
+  deletedAt: DateTime
+  createdAt: DateTime!
+}
+
+# ------ Référentiel National (Congo-Brazzaville) ------
+# Données globales, mutualisées entre tous les établissements. Gérées par le
+# Super Admin uniquement ; les écoles n'y écrivent jamais, elles activent un
+# sous-ensemble via Level.nationalLevelId / Subject.nationalSubjectId.
+type NationalLevel {
+  id: ID!
+  cycle: LevelType!
+  nom: String!
+  ordre: Int!
+}
+
+type NationalSeries {
+  id: ID!
+  code: String!
+  nom: String!
+}
+
+type NationalSubject {
+  id: ID!
+  code: String!
+  nom: String!
+}
+
+type NationalCurriculumEntry {
+  id: ID!
+  nationalLevelId: ID!
+  nationalSeriesId: ID
+  nationalSubjectId: ID!
+  coefficient: Float!
+  volumeHoraireHebdo: Int
+}
+
+type NationalReferential {
+  levels: [NationalLevel!]!
+  series: [NationalSeries!]!
+  subjects: [NationalSubject!]!
+  curriculum: [NationalCurriculumEntry!]!
+}
+
+# ------ Class ------
+type Class {
+  id: ID!
+  school: School!
+  level: Level!
+  nationalSeriesId: ID        # série nationale (Lycée), ex: "D" pour "Terminale D1"
+  nom: String!               # 4ème A
+  anneeScolaire: String!
+  isActive: Boolean!
+  deletedAt: DateTime
+  classSubjects: [ClassSubject!]!
+  students: [Student!]!
+  studentCount: Int!
+  createdAt: DateTime!
+}
+
+# ------ Subject ------
+type Subject {
+  id: ID!
+  school: School!
+  nom: String!
+  description: String
+  classSubjects: [ClassSubject!]!
+  nationalSubjectId: ID
+  isActive: Boolean!
+  deletedAt: DateTime
+  createdAt: DateTime!
+}
+
+# ------ ClassSubject (pivot Classe <-> Matière <-> Enseignant) ------
+type ClassSubject {
+  id: ID!
+  class: Class
+  subject: Subject!
+  teacher: SchoolMembership!
+  coefficient: Float!
+  hoursPerWeek: Int
+  grades: [Grade!]!
+  attendances: [Attendance!]!
+  schedules: [Schedule!]!
+  isActive: Boolean!
+  deletedAt: DateTime
+  createdAt: DateTime!
+}
+
+
+# ── Recherche Globale ─────────────────────────────────────────
+type GlobalSearchResult {
+  type:        String!   # 'student' | 'teacher' | 'class' | 'subject'
+  id:          ID!
+  label:       String!
+  sublabel:    String
+  href:        String!
+}
+
+# ------ Student ------
+type Student {
+  id: ID!
+  membership: SchoolMembership!
+  class: Class
+  matricule: String!         # = code du membership student
+  tempPassword: String
+  parentTempPassword: String
+  dateNaissance: String
+  sexe: Gender
+  parents: [ParentStudent!]!
+  grades: [Grade!]!
+  attendances: [Attendance!]!
+  payments: [Payment!]!
+  bulletins: [Bulletin!]!
+  isActive: Boolean!
+  deletedAt: DateTime
+  createdAt: DateTime!
+}
+
+# ------ Parent <-> Student link ------
+type ParentStudent {
+  id: ID!
+  parent: SchoolMembership!
+  student: Student!
+  lien: ParentLink!
+}
+
+# ------ Grade (Note) ------
+type Grade {
+  id: ID!
+  student: Student!
+  classSubject: ClassSubject!
+  valeur: Float!             # 0 - 20
+  typeEval: EvalType!
+  trimestre: Trimester!
+  dateSaisie: String
+  enseignant: SchoolMembership!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+# ------ Attendance (Présence) ------
+type Attendance {
+  id: ID!
+  student: Student!
+  classSubject: ClassSubject!
+  date: String!
+  statut: AttendanceStatus!
+  motif: String
+  markedBy: SchoolMembership!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+# ------ Payment ------
+type Payment {
+  id: ID!
+  student: Student!
+  mois: Int!                 # 1 - 9
+  anneeScolaire: String!
+  statut: PaymentStatus!
+  montantDu: Float!
+  montantPaye: Float!
+  datePaiement: String
+  updatedBy: SchoolMembership
+  recuUrl: String            # URL du reçu PDF (uniquement si PAYE ou EXONERE)
+  transactions: [PaymentTransaction!]!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+# Transaction individuelle (guichet ou distance) — journal immuable
+type PaymentTransaction {
+  id: ID!
+  payment: Payment!
+  student: Student!
+  montant: Float!
+  devise: String!
+  mode: PaymentMode!
+  canal: TransactionChannel!
+  statut: TransactionStatus!
+  codeEchec: TransactionFailureCode
+  numeroTelephone: String
+  numeroRecu: String
+  transactionRef: String!
+  agent: SchoolMembership
+  observations: String
+  annuleTransactionId: ID
+  recuUrl: String             # URL du reçu PDF (si statut = VALIDEE)
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+# Résultat renvoyé par les mutations d'encaissement/paiement à distance
+type PaymentOperationResult {
+  transaction: PaymentTransaction!
+  payment: Payment
+}
+
+# ------ Bulletin ------
+type Bulletin {
+  id: ID!
+  student: Student!
+  trimestre: Trimester!
+  anneeScolaire: String!
+  statut: BulletinStatus!
+  pdfUrl: String
+  moyenneGenerale: Float
+  rang: Int
+  mention: Mention
+  isDownloadable: Boolean!   # false si paiements du trimestre incomplets
+  details: [BulletinDetail!]!
+  generatedAt: DateTime
+  updatedAt: DateTime!
+}
+
+# Détail d'une matière dans le bulletin
+type BulletinDetail {
+  id: ID!
+  bulletin: Bulletin!
+  classSubject: ClassSubject!
+  moyenneMatiere: Float!
+  coefficient: Float!
+  pointsObtenus: Float!      # moyenne × coefficient
+  appreciation: String
+}
+
+# ------ Schedule (Emploi du temps) ------
+type Schedule {
+  id: ID!
+  classSubject: ClassSubject!
+  jour: Int!                 # 1=Lundi … 6=Samedi
+  heureDebut: String!        # "08:00"
+  heureFin: String!          # "09:00"
+  salle: String
+  createdAt: DateTime!
+}
+
+# ------ Message ------
+type Message {
+  id: ID!
+  school: School!
+  sender: SchoolMembership!
+  receiver: SchoolMembership!
+  sujet: String!
+  contenu: String!
+  lu: Boolean!
+  createdAt: DateTime!
+}
+
+# ------ Notification ------
+type Notification {
+  id: ID!
+  profile: GlobalProfile!
+  school: School
+  titre: String!
+  message: String!
+  type: NotificationType!
+  lu: Boolean!
+  createdAt: DateTime!
+}
+
+# ------ Announcement ------
+type Announcement {
+  id: ID!
+  school: School!
+  auteur: SchoolMembership!
+  titre: String!
+  contenu: String!
+  cible: AnnouncementTarget!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+# ------ Audit Log ------
+type AuditLog {
+  id: ID!
+  school: School!
+  actor: SchoolMembership!
+  action: AuditAction!
+  entityType: String!        # "student" | "bulletin" | "grade" | "payment" ...
+  entityId: ID!
+  oldValue: JSON
+  newValue: JSON
+  description: String        # message lisible humain
+  createdAt: DateTime!
+}
+
+
+# ============================================================
+# TYPES — AUTH & SESSION
+# ============================================================
+
+type AuthPayload {
+  accessToken: String!
+  refreshToken: String!
+  profile: GlobalProfile!
+  currentMembership: SchoolMembership
+  availableMemberships: [SchoolMembership!]!
+}
+
+type SwitchWorkspacePayload {
+  accessToken: String!
+  membership: SchoolMembership!
+}
+
+
+# ============================================================
+# TYPES — ANALYTICS & DASHBOARD
+# ============================================================
+
+# Dashboard Super Admin
+type SuperAdminDashboard {
+  totalSchools: Int!
+  totalProfiles: Int!
+  recentSchools: [School!]!
+}
+
+# Dashboard Admin
+type AdminDashboard {
+  totalStudents: Int!
+  totalTeachers: Int!
+  totalParents: Int!
+  totalClasses: Int!
+  presentToday: Int!
+  absentToday: Int!
+  unpaidCurrentMonth: Int!
+  unpaidStudents: [Student!]!
+  recentAuditLogs: [AuditLog!]!
+  classPerformance: [ClassPerformanceStat!]!
+  attendanceHeatmap: [AttendanceHeatmapPoint!]!
+  gradeEvolution: [GradeEvolutionPoint!]!
+  mentionDistribution: [MentionDistributionPoint!]!
+}
+
+type GradeEvolutionPoint {
+  trimestre: String!
+  moyenne: Float!
+  nbEleves: Int!
+}
+
+type MentionDistributionPoint {
+  mention: String!
+  count: Int!
+  color: String!
+}
+
+type ClassPerformanceStat {
+  class: Class!
+  moyenneGenerale: Float!
+  topSubject: Subject
+  weakSubject: Subject
+}
+
+type AttendanceHeatmapPoint {
+  date: String!
+  count: Int!
+  statut: AttendanceStatus!
+}
+
+# Dashboard Enseignant
+type DayAbsenceStat {
+  jour: String!
+  absences: Int!
+  presents: Int!
+  total: Int!
+}
+
+type StudentAtRisk {
+  student: Student!
+  moyenne: Float!
+  absenceCount: Int!
+}
+
+type TeacherDashboard {
+  classSubjectsToday: [ClassSubject!]!
+  recentGrades: [Grade!]!
+  pendingAttendance: [ClassSubject!]!
+  myClasses: [Class!]!
+  weeklyAbsences: [DayAbsenceStat!]!
+  studentsAtRisk: [StudentAtRisk!]!
+  totalStudents: Int!
+}
+
+# Dashboard Parent
+type ParentDashboard {
+  children: [StudentSummary!]!
+  unreadMessages: Int!
+  unreadNotifications: Int!
+}
+
+type StudentSummary {
+  student: Student!
+  moyenneGenerale: Float
+  presenceRate: Float
+  currentMonthPayment: Payment
+  unpaidMonths: [Payment!]!
+  recentGrades: [Grade!]!
+  recentAbsences: [Attendance!]!
+  allGrades: [Grade!]!
+  allAttendances: [Attendance!]!
+}
+
+# Dashboard Élève
+type StudentDashboard {
+  recentGrades: [Grade!]!
+  upcomingSchedule: [Schedule!]!
+  recentAbsences: [Attendance!]!
+  currentMoyennes: [SubjectAverage!]!
+  announcements: [Announcement!]!
+}
+
+type SubjectAverage {
+  classSubject: ClassSubject!
+  moyenne: Float!
+  trimestre: Trimester!
+}
+
+# Statistiques détaillées d'un élève
+type StudentStats {
+  student: Student!
+  moyennesParMatiere: [SubjectAverage!]!
+  moyennesParTrimestre: [TrimesterAverage!]!
+  absencesParMois: [AbsenceMonthStat!]!
+  rang: Int
+  mention: Mention
+}
+
+type TrimesterAverage {
+  trimestre: Trimester!
+  moyenne: Float!
+}
+
+type AbsenceMonthStat {
+  mois: Int!
+  count: Int!
+}
+
+# État des paiements d'un élève (par trimestre)
+type PaymentSummary {
+  student: Student!
+  anneeScolaire: String!
+  moisDetails: [Payment!]!
+  t1Unlocked: Boolean!
+  t2Unlocked: Boolean!
+  t3Unlocked: Boolean!
+  totalPaid: Int!
+  totalUnpaid: Int!
+}
+
+# Export
+type ExportResult {
+  url: String!
+  filename: String!
+  expiresAt: DateTime!
+}
+
+# Résultat pagination générique
+type PageInfo {
+  hasNextPage: Boolean!
+  hasPreviousPage: Boolean!
+  totalCount: Int!
+  currentPage: Int!
+  totalPages: Int!
+}
+
+type MembershipPage {
+  data: [SchoolMembership!]!
+  pageInfo: PageInfo!
+}
+
+type InviteResult {
+  membership: SchoolMembership!
+  tempPassword: String!
+}
+
+type GradePage {
+  data: [Grade!]!
+  pageInfo: PageInfo!
+}
+
+type AttendancePage {
+  data: [Attendance!]!
+  pageInfo: PageInfo!
+}
+
+type AuditLogPage {
+  data: [AuditLog!]!
+  pageInfo: PageInfo!
+}
+
+type NotificationPage {
+  data: [Notification!]!
+  pageInfo: PageInfo!
+}
+
+type MessagePage {
+  data: [Message!]!
+  pageInfo: PageInfo!
+}
+
+type StudentPage {
+  data: [Student!]!
+  pageInfo: PageInfo!
+}
+
+type SchoolPage {
+  data: [School!]!
+  pageInfo: PageInfo!
+}
+
+
+# ============================================================
+# INPUT TYPES
+# ============================================================
+
+# ------ Auth ------
+input LoginInput {
+  # Email, identifiant de connexion (matricule, ex: STU-A1B2) ou téléphone.
+  # Beaucoup d'utilisateurs (parents, élèves) n'ont pas d'email personnel :
+  # l'identifiant ou le téléphone sont des moyens de connexion à part entière.
+  identifiant: String!
+  password: String!
+}
+
+type AdminResetPasswordResult {
+  tempPassword: String!
+  # false si l'utilisateur n'a qu'un email interne généré automatiquement
+  # (donc aucun email n'a réellement pu être envoyé — l'admin doit
+  # communiquer le mot de passe en personne).
+  hasRealEmail: Boolean!
+}
+
+# Avant : createSchool renvoyait juste School!, sans jamais exposer le
+# mot de passe temporaire généré pour l'admin — impossible de le
+# communiquer après la création (aucun email n'est envoyé si l'admin n'a
+# qu'un téléphone).
+type CreateSchoolResult {
+  school: School!
+  adminIdentifiant: String!   # email si fourni, sinon identifiant de connexion
+  adminTempPassword: String!
+  hasRealEmail: Boolean!
+}
+
+input RegisterProfileInput {
+  nom: String!
+  prenom: String!
+  email: String!
+  password: String!
+  phone: String
+}
+
+input UpdateProfileInput {
+  nom: String
+  prenom: String
+  email: String
+  phone: String
+  avatarUrl: String
+}
+
+input ChangePasswordInput {
+  oldPassword: String!
+  newPassword: String!
+}
+
+# ------ Super Admin ------
+input CreateSchoolInput {
+  nom: String!
+  adresse: String
+  telephone: String
+  anneeScolaire: String!
+  logoUrl: String
+  # Données admin initial de l'école — email OU téléphone requis (l'un des deux)
+  adminNom: String!
+  adminPrenom: String!
+  adminEmail: String
+  adminPhone: String
+  # Cycles à activer automatiquement depuis le référentiel national
+  # (par défaut : PRIMAIRE, COLLEGE et LYCEE — l'universitaire n'est pas
+  # proposé). L'admin pourra ensuite activer/désactiver des niveaux
+  # individuellement sans jamais modifier le référentiel lui-même.
+  cycles: [LevelType!]
+  # Numéros de division créés par défaut pour chaque niveau SANS série
+  # (ex: ["1","2"] crée "6ème 1" ET "6ème 2"). Par défaut : ["1","2","3","4"]
+  # (4 divisions). Les lettres (A/C/D...) restent réservées aux séries de lycée.
+  divisions: [String!]
+}
+
+# ------ School ------
+input UpdateSchoolInput {
+  nom: String
+  adresse: String
+  telephone: String
+  logoUrl: String
+  anneeScolaire: String
+  accentColor: String
+}
+
+# ------ Level ------
+input CreateLevelInput {
+  schoolId: ID!
+  nom: String!
+  type: LevelType!
+  ordre: Int!
+}
+
+# ------ Class ------
+input CreateClassInput {
+  schoolId: ID!
+  levelId: ID!
+  nom: String!
+  anneeScolaire: String!
+}
+
+input UpdateClassInput {
+  nom: String
+  levelId: ID
+}
+
+# ------ Subject ------
+input CreateSubjectInput {
+  schoolId: ID!
+  nom: String!
+  description: String
+}
+
+input UpdateSubjectInput {
+  nom: String
+  description: String
+}
+
+# ------ ClassSubject ------
+input AssignClassSubjectInput {
+  classId: ID!
+  subjectId: ID!
+  teacherMembershipId: ID!
+  coefficient: Float!
+  hoursPerWeek: Int
+}
+
+input UpdateClassSubjectInput {
+  teacherMembershipId: ID
+  coefficient: Float
+  hoursPerWeek: Int
+}
+
+# ------ User / Membership ------
+input InviteUserInput {
+  schoolId: ID!
+  role: Role!
+  # Invitation par email OU code profil
+  email: String
+  profileCode: String
+  # Si nouveau profil
+  nom: String
+  prenom: String
+  phone: String
+}
+
+input CreateStudentInput {
+  schoolId: ID!
+  classId: ID!
+  nom: String!
+  prenom: String!
+  email: String
+  phone: String
+  dateNaissance: String
+  sexe: Gender
+  # Données parent lié
+  parentEmail: String
+  parentNom: String
+  parentPrenom: String
+  parentPhone: String
+  parentLien: ParentLink
+}
+
+input UpdateStudentInput {
+  classId: ID
+  dateNaissance: String
+  sexe: Gender
+}
+
+input LinkParentStudentInput {
+  parentMembershipId: ID!
+  studentId: ID!
+  lien: ParentLink!
+}
+
+input UpdateMembershipStatusInput {
+  membershipId: ID!
+  status: MembershipStatus!
+}
+
+# ------ Grade ------
+input CreateGradeInput {
+  studentId: ID!
+  classSubjectId: ID!
+  valeur: Float!
+  typeEval: EvalType!
+  trimestre: Trimester!
+  dateSaisie: String
+}
+
+input UpdateGradeInput {
+  valeur: Float
+  typeEval: EvalType
+}
+
+input BulkCreateGradesInput {
+  classSubjectId: ID!
+  trimestre: Trimester!
+  typeEval: EvalType!
+  dateSaisie: String
+  grades: [StudentGradeItem!]!
+}
+
+input StudentGradeItem {
+  studentId: ID!
+  valeur: Float!
+}
+
+# ------ Attendance ------
+input MarkAttendanceInput {
+  classSubjectId: ID!
+  date: String!
+  records: [AttendanceRecord!]!
+}
+
+input AttendanceRecord {
+  studentId: ID!
+  statut: AttendanceStatus!
+  motif: String
+}
+
+input UpdateAttendanceInput {
+  statut: AttendanceStatus!
+  motif: String
+}
+
+# ------ Payment ------
+input UpdatePaymentStatusInput {
+  studentId: ID!
+  anneeScolaire: String!
+  mois: [Int!]!             # liste de mois à changer (1-9)
+  statut: PaymentStatus!
+}
+
+input RecordManualPaymentInput {
+  studentId: ID!
+  mois: Int!
+  anneeScolaire: String!
+  montant: Float!
+  mode: PaymentMode!         # ESPECES | VIREMENT | CHEQUE | AUTRE (pas MOBILE_MONEY ici)
+  observations: String
+}
+
+input CancelPaymentTransactionInput {
+  transactionId: ID!
+  observations: String
+}
+
+input InitiateRemotePaymentInput {
+  studentId: ID!
+  mois: Int!
+  anneeScolaire: String!
+  montant: Float!            # montant en XAF
+  numeroTelephone: String!
+}
+
+# ------ Bulletin ------
+input GenerateBulletinsInput {
+  classId: ID!
+  trimestre: Trimester!
+  anneeScolaire: String!
+}
+
+input UpdateBulletinInput {
+  statut: BulletinStatus
+  pdfUrl: String
+}
+
+# ------ Schedule ------
+input CreateScheduleInput {
+  classSubjectId: ID!
+  jour: Int!
+  heureDebut: String!
+  heureFin: String!
+  salle: String
+}
+
+input UpdateScheduleInput {
+  jour: Int
+  heureDebut: String
+  heureFin: String
+  salle: String
+}
+
+# ------ Message ------
+input SendMessageInput {
+  schoolId: ID!
+  receiverId: ID!
+  sujet: String!
+  contenu: String!
+}
+
+# ------ Announcement ------
+input CreateAnnouncementInput {
+  schoolId: ID!
+  titre: String!
+  contenu: String!
+  cible: AnnouncementTarget!
+}
+
+# ------ Export ------
+input ExportInput {
+  schoolId: ID!
+  type: ExportType!
+  classId: ID
+  trimestre: Trimester
+  anneeScolaire: String
+  startDate: DateTime
+  endDate: DateTime
+}
+
+# ------ Filters & Pagination ------
+input PaginationInput {
+  page: Int! = 1
+  limit: Int! = 20
+}
+
+input AuditLogFilter {
+  schoolId: ID!
+  action: AuditAction
+  entityType: String
+  actorId: ID
+  startDate: DateTime
+  endDate: DateTime
+}
+
+input GradeFilter {
+  studentId: ID
+  classSubjectId: ID
+  trimestre: Trimester
+  typeEval: EvalType
+}
+
+input AttendanceFilter {
+  studentId: ID
+  classSubjectId: ID
+  statut: AttendanceStatus
+  startDate: DateTime
+  endDate: DateTime
+}
+
+
+# ============================================================
+# QUERIES
+# ============================================================
+
+type ProfilePage {
+  data: [GlobalProfile!]!
+  pageInfo: PageInfo!
+}
+
+type Query {
+
+  # ---- AUTH / PROFIL ----
+  me: GlobalProfile!
+  myMemberships: [SchoolMembership!]!
+  myCurrentMembership(schoolId: ID!): SchoolMembership
+
+  # ---- SUPER ADMIN ----
+  superAdminDashboard: SuperAdminDashboard!
+  allSchools(pagination: PaginationInput): SchoolPage!
+  schoolById(id: ID!): School
+  allProfiles(pagination: PaginationInput): ProfilePage!
+
+  # ---- SCHOOL ----
+  mySchool(schoolId: ID!): School!
+  schoolMembers(schoolId: ID!, role: Role, pagination: PaginationInput): MembershipPage!
+
+  # ---- DASHBOARD ----
+  adminDashboard(schoolId: ID!): AdminDashboard!
+  teacherDashboard(schoolId: ID!): TeacherDashboard!
+  parentDashboard(schoolId: ID!): ParentDashboard!
+  studentDashboard(schoolId: ID!): StudentDashboard!
+
+  # ---- LEVELS ----
+  # Référentiel national complet (Congo-Brazzaville), en lecture seule —
+  # sert notamment à afficher les niveaux/séries/matières disponibles
+  # avant activation par un établissement.
+  nationalReferential: NationalReferential!
+
+  # Annuaire des identifiants. SUPER_ADMIN : schoolId optionnel (omis =
+  # toute la plateforme, hors autres super admins). ADMIN : forcé sur sa
+  # propre école, rôles enseignant/parent/élève uniquement.
+  usersDirectory(schoolId: ID): [UserDirectoryEntry!]!
+
+  levelsBySchool(schoolId: ID!): [Level!]!
+  levelById(id: ID!): Level
+
+  # ---- CLASSES ----
+  classesBySchool(schoolId: ID!, levelId: ID): [Class!]!
+  classesByTeacher(schoolId: ID!): [Class!]!
+  classById(id: ID!): Class
+
+  # ---- SUBJECTS ----
+  subjectsBySchool(schoolId: ID!): [Subject!]!
+  subjectById(id: ID!): Subject
+
+  # ---- CLASS SUBJECTS ----
+  classSubjectsByClass(classId: ID!): [ClassSubject!]!
+  classSubjectsByTeacher(schoolId: ID!): [ClassSubject!]!
+  classSubjectById(id: ID!): ClassSubject
+
+  # ---- STUDENTS ----
+  studentsByClass(classId: ID!, pagination: PaginationInput): StudentPage!
+  studentsBySchool(schoolId: ID!, pagination: PaginationInput): StudentPage!
+  studentById(id: ID!): Student
+  studentStats(studentId: ID!, anneeScolaire: String!): StudentStats!
+  myStudentProfile(schoolId: ID!): Student!
+
+  # ---- PARENTS ----
+  myChildren(schoolId: ID!): [Student!]!
+  childSummary(studentId: ID!): StudentSummary!
+
+  # ---- GRADES ----
+  gradesByStudent(filter: GradeFilter!, pagination: PaginationInput): GradePage!
+  gradesByClassSubject(classSubjectId: ID!, trimestre: Trimester): [Grade!]!
+  gradesByClass(classId: ID!, trimestre: Trimester!): [Grade!]!
+  gradeById(id: ID!): Grade
+
+  # ---- ATTENDANCE ----
+  attendanceByClassSubject(classSubjectId: ID!, date: String!): [Attendance!]!
+  attendanceByStudent(filter: AttendanceFilter!, pagination: PaginationInput): AttendancePage!
+  attendanceSummary(studentId: ID!, anneeScolaire: String!): AbsenceMonthStat
+
+  # ---- PAYMENTS ----
+  paymentsByStudent(studentId: ID!, anneeScolaire: String!): PaymentSummary!
+  unpaidStudents(schoolId: ID!, anneeScolaire: String!, mois: Int!): [Student!]!
+  paymentsByClass(classId: ID!, anneeScolaire: String!): [PaymentSummary!]!
+  paymentTransactionHistory(studentId: ID!, anneeScolaire: String): [PaymentTransaction!]!
+
+  # ---- BULLETINS ----
+  bulletinsByStudent(studentId: ID!, anneeScolaire: String!): [Bulletin!]!
+  bulletinById(id: ID!): Bulletin
+  bulletinsByClass(classId: ID!, trimestre: Trimester!, anneeScolaire: String!): [Bulletin!]!
+
+  # ---- SCHEDULES ----
+  scheduleByClass(classId: ID!): [Schedule!]!
+  # Emploi du temps d'un enseignant précis (par membershipId) — utilisé côté
+  # admin pour avertir d'un conflit AVANT la création d'un créneau, plutôt
+  # que de laisser l'admin découvrir le conflit seulement après coup.
+  scheduleByTeacherMembership(teacherMembershipId: ID!): [Schedule!]!
+  scheduleByTeacher(schoolId: ID!): [Schedule!]!
+
+  # ---- MESSAGES ----
+  myMessages(schoolId: ID!, pagination: PaginationInput): MessagePage!
+  conversation(schoolId: ID!, withMembershipId: ID!, pagination: PaginationInput): MessagePage!
+  unreadMessageCount(schoolId: ID!): Int!
+
+  # ---- NOTIFICATIONS ----
+  myNotifications(pagination: PaginationInput): NotificationPage!
+  unreadNotificationCount: Int!
+
+  # ---- ANNOUNCEMENTS ----
+  announcementsBySchool(schoolId: ID!): [Announcement!]!
+  announcementById(id: ID!): Announcement
+
+  # ---- AUDIT LOGS ----
+  auditLogs(filter: AuditLogFilter!, pagination: PaginationInput): AuditLogPage!
+
+  # ---- SEARCH ----
+  # Email, code identifiant, OU téléphone (le nom du paramètre reste
+  # emailOrCode pour compatibilité, mais accepte aussi un numéro).
+  searchProfile(emailOrCode: String!): GlobalProfile
+  searchStudents(schoolId: ID!, query: String!): [Student!]!
+  searchMembers(schoolId: ID!, query: String, role: Role): [SchoolMembership!]!
+  globalSearch(schoolId: ID!, query: String!): [GlobalSearchResult!]!
+
+}
+
+
+# ============================================================
+# MUTATIONS
+# ============================================================
+
+type Mutation {
+
+  # ---- AUTH ----
+  login(input: LoginInput!): AuthPayload!
+  logout: Boolean!
+  refreshToken(token: String!): AuthPayload!
+  switchWorkspace(schoolId: ID!): SwitchWorkspacePayload!
+  changePassword(input: ChangePasswordInput!): Boolean!
+
+  # Email, identifiant ou téléphone — comme pour login(). Ne révèle jamais
+  # si le compte existe. Si l'utilisateur n'a pas d'email personnel réel
+  # (uniquement l'email interne généré automatiquement), aucun email ne
+  # part réellement — seul un admin peut alors utiliser adminResetPassword.
+  requestPasswordReset(identifiant: String!): Boolean!
+
+  # Réinitialisation en présentiel par un admin d'école — seul canal fiable
+  # pour les utilisateurs sans email personnel (fréquent chez les parents
+  # et élèves). Renvoie le nouveau mot de passe à remettre en main propre.
+  adminResetPassword(membershipId: ID!): AdminResetPasswordResult!
+  updateProfile(input: UpdateProfileInput!): GlobalProfile!
+  uploadAvatar(file: Upload!): GlobalProfile!
+
+  # ---- SUPER ADMIN ----
+  createSchool(input: CreateSchoolInput!): CreateSchoolResult!
+  updateSchoolBySuper(schoolId: ID!, input: UpdateSchoolInput!): School!
+  deactivateSchool(schoolId: ID!): Boolean!
+
+  # ---- SCHOOL (Admin) ----
+  updateSchool(input: UpdateSchoolInput!): School!
+
+  # ---- LEVELS ----
+  createLevel(input: CreateLevelInput!): Level!
+  updateLevel(id: ID!, input: CreateLevelInput!): Level!
+  deleteLevel(id: ID!): Boolean!        # soft delete — restaurable
+  restoreLevel(id: ID!): Level!
+
+  # Active/désactive un niveau ou une matière déjà provisionnés depuis le
+  # référentiel national. Ne modifie JAMAIS le référentiel lui-même —
+  # seulement l'activation locale à l'établissement.
+  toggleSchoolLevel(levelId: ID!, isActive: Boolean!): Level!
+  toggleSchoolSubject(subjectId: ID!, isActive: Boolean!): Subject!
+
+  # ---- CLASSES ----
+  createClass(input: CreateClassInput!): Class!
+  updateClass(id: ID!, input: UpdateClassInput!): Class!
+  deleteClass(id: ID!): Boolean!        # soft delete — restaurable
+  restoreClass(id: ID!): Class!
+
+  # ---- SUBJECTS ----
+  createSubject(input: CreateSubjectInput!): Subject!
+  updateSubject(id: ID!, input: UpdateSubjectInput!): Subject!
+  deleteSubject(id: ID!): Boolean!      # soft delete — restaurable
+  restoreSubject(id: ID!): Subject!
+
+  # ---- CLASS SUBJECTS ----
+  assignClassSubject(input: AssignClassSubjectInput!): ClassSubject!
+  updateClassSubject(id: ID!, input: UpdateClassSubjectInput!): ClassSubject!
+  removeClassSubject(id: ID!): Boolean!
+
+  # ---- USERS / MEMBERSHIPS ----
+  inviteUser(input: InviteUserInput!): InviteResult!
+  createStudent(input: CreateStudentInput!): Student!
+  updateStudent(id: ID!, input: UpdateStudentInput!): Student!
+  deleteStudent(id: ID!): Boolean!        # soft delete — restaurable
+  restoreStudent(id: ID!): Boolean!
+  linkParentStudent(input: LinkParentStudentInput!): ParentStudent!
+  unlinkParentStudent(parentMembershipId: ID!, studentId: ID!): Boolean!
+  updateMembershipStatus(input: UpdateMembershipStatusInput!): SchoolMembership!
+  transferStudentClass(studentId: ID!, newClassId: ID!): Student!
+
+  # ---- GRADES ----
+  createGrade(input: CreateGradeInput!): Grade!
+  bulkCreateGrades(input: BulkCreateGradesInput!): [Grade!]!
+  updateGrade(id: ID!, input: UpdateGradeInput!): Grade!
+  deleteGrade(id: ID!): Boolean!        # soft delete — restaurable
+  restoreGrade(id: ID!): Grade!
+
+  # ---- ATTENDANCE ----
+  markAttendance(input: MarkAttendanceInput!): [Attendance!]!
+  updateAttendance(id: ID!, input: UpdateAttendanceInput!): Attendance!
+
+  # ---- PAYMENTS ----
+  updatePaymentStatus(input: UpdatePaymentStatusInput!): [Payment!]!
+  recordManualPayment(input: RecordManualPaymentInput!): PaymentOperationResult!
+  cancelPaymentTransaction(input: CancelPaymentTransactionInput!): PaymentOperationResult!
+  initiateRemotePayment(input: InitiateRemotePaymentInput!): PaymentOperationResult!
+
+  # ---- BULLETINS ----
+  generateBulletins(input: GenerateBulletinsInput!): [Bulletin!]!
+  updateBulletin(id: ID!, input: UpdateBulletinInput!): Bulletin!
+  deleteBulletin(id: ID!): Boolean!
+  publishBulletin(id: ID!): Bulletin!
+  generateBulletinPdf(bulletinId: ID!): Bulletin!
+  archiveBulletin(id: ID!): Bulletin!
+  regenerateBulletin(id: ID!): Bulletin!
+
+  # ---- SCHEDULES ----
+  createSchedule(input: CreateScheduleInput!): Schedule!
+  updateSchedule(id: ID!, input: UpdateScheduleInput!): Schedule!
+  deleteSchedule(id: ID!): Boolean!
+
+  # ---- MESSAGES ----
+  sendMessage(input: SendMessageInput!): Message!
+  markMessageAsRead(id: ID!): Message!
+  markAllMessagesAsRead(schoolId: ID!): Boolean!
+  deleteMessage(id: ID!): Boolean!
+
+  # ---- NOTIFICATIONS ----
+  markNotificationAsRead(id: ID!): Notification!
+  markAllNotificationsAsRead: Boolean!
+  deleteNotification(id: ID!): Boolean!
+
+  # ---- ANNOUNCEMENTS ----
+  createAnnouncement(input: CreateAnnouncementInput!): Announcement!
+  updateAnnouncement(id: ID!, input: CreateAnnouncementInput!): Announcement!
+  deleteAnnouncement(id: ID!): Boolean!  # soft delete — restaurable
+  restoreAnnouncement(id: ID!): Announcement!
+
+  # ---- EXPORT ----
+  exportData(input: ExportInput!): ExportResult!
+}
+
+
+# ============================================================
+# SUBSCRIPTIONS
+# ============================================================
+
+type Subscription {
+
+  # Nouvelle notification en temps réel
+  notificationAdded(profileId: ID!): Notification!
+
+  # Nouveau message reçu
+  messageReceived(schoolId: ID!, membershipId: ID!): Message!
+
+  # Mise à jour présences (admin voit en temps réel)
+  attendanceUpdated(classSubjectId: ID!): Attendance!
+
+  # Mise à jour statut bulletin
+  bulletinStatusChanged(studentId: ID!): Bulletin!
+
+  # Mise à jour statut paiement
+  paymentStatusChanged(studentId: ID!): Payment!
+
+  # Dénouement d'un paiement à distance simulé (Mobile Money), suivi par
+  # référence de transaction — utile pour un écran "en attente de confirmation".
+  remotePaymentStatusChanged(transactionId: ID!): PaymentTransaction!
+
+  # Nouvelle annonce dans l'école
+  announcementPublished(schoolId: ID!): Announcement!
+}

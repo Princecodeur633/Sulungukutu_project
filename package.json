@@ -1,0 +1,30 @@
+{
+  "name": "sulungukutu",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Plateforme numérique de gestion scolaire — Kassy Gloire Exaucé",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"pnpm --filter web dev\" \"pnpm --filter api dev\"",
+    "build": "pnpm --filter web build && pnpm --filter api build",
+    "db:generate": "pnpm --filter api db:generate",
+    "db:migrate": "pnpm --filter api db:migrate",
+    "db:studio": "pnpm --filter api db:studio",
+    "db:seed": "pnpm --filter api db:seed",
+    "db:push": "pnpm --filter api db:push",
+    "db:reset": "pnpm --filter api db:reset",
+    "lint": "pnpm --filter web lint && pnpm --filter api build",
+    "setup": "pnpm install && pnpm db:generate && pnpm db:migrate && pnpm db:seed",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:report": "playwright show-report"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "typescript": "^5.4.5",
+    "@playwright/test": "^1.44.0"
+  }
+}

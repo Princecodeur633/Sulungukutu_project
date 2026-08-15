@@ -1,0 +1,20 @@
+{
+  "name": "sulungukutu",
+  "short_name": "sulungukutu",
+  "description": "Gestion scolaire intelligente",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0c0c0c",
+  "theme_color": "#0c0c0c",
+  "orientation": "portrait-primary",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "categories": ["education", "productivity"],
+  "shortcuts": [
+    { "name": "Tableau de bord", "url": "/admin/dashboard", "description": "Accéder au tableau de bord" },
+    { "name": "Élèves", "url": "/admin/students", "description": "Gérer les élèves" }
+  ]
+}
+
