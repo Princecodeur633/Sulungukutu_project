@@ -290,6 +290,11 @@ export const userResolvers = {
       ctx: GraphQLContext
     ) => {
       const input = args.input;
+      if ((input.role as string) === 'STUDENT') {
+        throw new GraphQLError("Utilisez l'inscription élève pour créer un compte élève.", {
+          extensions: { code: 'BAD_USER_INPUT' },
+        });
+      }
 
       // Le contrôle précédent (comparaison manuelle à `user.schoolId`)
       // était en fait correct — `schoolId` est bien peuplé dans le JWT au

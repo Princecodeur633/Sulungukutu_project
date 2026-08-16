@@ -14,7 +14,7 @@ const PUBLIC_PREFIXES = [
 // Préfixe de route -> rôle(s) autorisé(s)
 const ROLE_PREFIXES: Record<string, string[]> = {
   '/superadmin': ['SUPER_ADMIN'],
-  '/admin':      ['ADMIN'],
+  '/admin':      ['ADMIN', 'SUPER_ADMIN'],
   '/teacher':    ['TEACHER'],
   '/parent':     ['PARENT'],
   '/student':    ['STUDENT'],

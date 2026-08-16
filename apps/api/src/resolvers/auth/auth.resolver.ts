@@ -8,6 +8,8 @@ import {
   signAccessToken,
   signRefreshToken,
   verifyRefreshToken,
+  signPasswordResetToken,
+  verifyPasswordResetToken,
 } from '../../utils/jwt';
 import { requireAuth, requireSchoolAdmin } from '../../middleware/permissions';
 import { LoginSchema, ChangePasswordSchema } from '../../utils/validators/schemas';
@@ -49,7 +51,8 @@ export const authResolvers = {
       return ctx.db.query.schoolMemberships.findFirst({
         where: and(
           eq(schoolMemberships.profileId, user.profileId),
-          eq(schoolMemberships.schoolId, args.schoolId)
+          eq(schoolMemberships.schoolId, args.schoolId),
+          eq(schoolMemberships.status, 'ACTIVE')
         ),
         with: { school: true },
       });
@@ -126,7 +129,11 @@ export const authResolvers = {
         membershipId: memberships[0]?.id,
       });
 
-      const refreshToken = signRefreshToken({ profileId: profile.id });
+      const refreshToken = signRefreshToken({
+        profileId: profile.id,
+        schoolId:  memberships[0]?.schoolId,
+        membershipId: memberships[0]?.id,
+      });
 
       return {
         accessToken,
@@ -171,22 +178,35 @@ export const authResolvers = {
         with:  { school: true },
       });
 
-      const role = profile.isSuperAdmin ? 'SUPER_ADMIN' : (memberships[0]?.role ?? 'STUDENT');
+      const membership =
+        (decoded.membershipId
+          ? memberships.find((m) => m.id === decoded.membershipId)
+          : undefined)
+        ?? (decoded.schoolId
+          ? memberships.find((m) => m.schoolId === decoded.schoolId)
+          : undefined)
+        ?? memberships[0];
+
+      const role = profile.isSuperAdmin ? 'SUPER_ADMIN' : (membership?.role ?? 'STUDENT');
 
       const accessToken  = signAccessToken({
         profileId: profile.id,
         email:     profile.email,
         role,
-        schoolId:  memberships[0]?.schoolId,
-        membershipId: memberships[0]?.id,
+        schoolId:  membership?.schoolId,
+        membershipId: membership?.id,
       });
-      const refreshToken = signRefreshToken({ profileId: profile.id });
+      const refreshToken = signRefreshToken({
+        profileId: profile.id,
+        schoolId:  membership?.schoolId,
+        membershipId: membership?.id,
+      });
 
       return {
         accessToken,
         refreshToken,
         profile,
-        currentMembership:    memberships[0] ?? null,
+        currentMembership:    membership ?? null,
         availableMemberships: memberships,
       };
     },
@@ -227,8 +247,13 @@ export const authResolvers = {
         schoolId:     membership.schoolId,
         membershipId: membership.id,
       });
+      const refreshToken = signRefreshToken({
+        profileId:    profile.id,
+        schoolId:     membership.schoolId,
+        membershipId: membership.id,
+      });
 
-      return { accessToken, membership };
+      return { accessToken, refreshToken, membership };
     },
 
     // Changement de mot de passe
@@ -263,7 +288,7 @@ export const authResolvers = {
       const newHash = await bcrypt.hash(input.newPassword, 12);
       await ctx.db
         .update(globalProfiles)
-        .set({ passwordHash: newHash, updatedAt: new Date() })
+        .set({ passwordHash: newHash, passwordChangedAt: new Date(), updatedAt: new Date() })
         .where(eq(globalProfiles.id, profile.id));
 
       return true;
@@ -295,24 +320,39 @@ export const authResolvers = {
       // révèle jamais si un identifiant est enregistré ou non.
       if (!profile) return true;
 
-      const newPassword = generateTempPassword();
-      const newHash     = await bcrypt.hash(newPassword, 12);
-      await ctx.db
-        .update(globalProfiles)
-        .set({ passwordHash: newHash, updatedAt: new Date() })
-        .where(eq(globalProfiles.id, profile.id));
-
-      // L'email interne généré automatiquement (…@ecole.sulungukutu.local)
-      // n'est jamais une vraie boîte mail — inutile d'essayer de l'envoyer.
-      // Dans ce cas, seul un admin de l'établissement peut communiquer le
-      // nouveau mot de passe (voir adminResetPassword ci-dessous).
       const hasRealEmail = !profile.email.endsWith('.sulungukutu.local');
       if (hasRealEmail) {
+        const token = signPasswordResetToken(profile.id);
         await emailService.sendPasswordReset({
-          to: profile.email, prenom: profile.prenom, newPassword,
+          to: profile.email, prenom: profile.prenom, token,
         }).catch(() => {});
       }
 
+      return true;
+    },
+
+    confirmPasswordReset: async (
+      _: unknown,
+      args: { token: string; newPassword: string },
+      ctx: GraphQLContext
+    ) => {
+      let decoded;
+      try {
+        decoded = verifyPasswordResetToken(args.token);
+      } catch {
+        throw new GraphQLError('Lien de réinitialisation invalide ou expiré', {
+          extensions: { code: 'UNAUTHENTICATED' },
+        });
+      }
+      const parsed = ChangePasswordSchema.pick({ newPassword: true }).safeParse({ newPassword: args.newPassword });
+      if (!parsed.success) {
+        throw new GraphQLError(parsed.error.issues[0]?.message ?? 'Mot de passe invalide');
+      }
+      const newHash = await bcrypt.hash(args.newPassword, 12);
+      await ctx.db
+        .update(globalProfiles)
+        .set({ passwordHash: newHash, passwordChangedAt: new Date(), updatedAt: new Date() })
+        .where(eq(globalProfiles.id, decoded.profileId));
       return true;
     },
 
@@ -338,7 +378,7 @@ export const authResolvers = {
       const newHash     = await bcrypt.hash(newPassword, 12);
       await ctx.db
         .update(globalProfiles)
-        .set({ passwordHash: newHash, updatedAt: new Date() })
+        .set({ passwordHash: newHash, passwordChangedAt: new Date(), updatedAt: new Date() })
         .where(eq(globalProfiles.id, membership.profileId));
 
       const hasRealEmail = !membership.profile.email.endsWith('.sulungukutu.local');

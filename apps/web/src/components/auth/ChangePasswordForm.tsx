@@ -28,7 +28,7 @@ export function ChangePasswordForm({ onSuccess }: { onSuccess?: () => void }) {
   })();
 
   const strengthLabel = ['', 'Faible', 'Moyen', 'Bon', 'Excellent'][strength];
-  const strengthColor = ['', 'bg-[var(--err-bg)]0', 'bg-[var(--warn-bg)]0', 'bg-lime-500', 'bg-[var(--ok-bg)]0'][strength];
+  const strengthColor = ['', 'bg-[var(--err)]', 'bg-[var(--warn)]', 'bg-lime-500', 'bg-[var(--ok)]'][strength];
 
   const handleSubmit = async () => {
     if (!form.oldPassword || !form.newPassword) return;

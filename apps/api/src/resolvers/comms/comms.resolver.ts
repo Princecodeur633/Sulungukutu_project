@@ -20,28 +20,34 @@ export const messageResolvers = {
       const limit  = args.pagination?.limit ?? 20;
       const offset = (page - 1) * limit;
 
-      const data = await ctx.db.query.messages.findMany({
-        where: or(
-          eq(messages.senderId,   user.membershipId!),
-          eq(messages.receiverId, user.membershipId!),
-        ),
-        limit,
-        offset,
-        orderBy: (m, { desc }) => [desc(m.createdAt)],
-        with: {
-          sender:   { with: { profile: true } },
-          receiver: { with: { profile: true } },
-        },
-      });
+      const where = or(
+        eq(messages.senderId,   user.membershipId!),
+        eq(messages.receiverId, user.membershipId!),
+      );
 
+      const [data, total] = await Promise.all([
+        ctx.db.query.messages.findMany({
+          where,
+          limit,
+          offset,
+          orderBy: (m, { desc }) => [desc(m.createdAt)],
+          with: {
+            sender:   { with: { profile: true } },
+            receiver: { with: { profile: true } },
+          },
+        }),
+        ctx.db.select({ count: count() }).from(messages).where(where),
+      ]);
+
+      const totalCount = Number(total[0]?.count ?? 0);
       return {
         data,
         pageInfo: {
-          hasNextPage:     data.length === limit,
+          hasNextPage:     offset + limit < totalCount,
           hasPreviousPage: page > 1,
-          totalCount:      data.length,
+          totalCount,
           currentPage:     page,
-          totalPages:      Math.ceil(data.length / limit),
+          totalPages:      Math.max(1, Math.ceil(totalCount / limit)),
         },
       };
     },
@@ -56,28 +62,34 @@ export const messageResolvers = {
       const limit  = args.pagination?.limit ?? 30;
       const offset = (page - 1) * limit;
 
-      const data = await ctx.db.query.messages.findMany({
-        where: or(
-          and(eq(messages.senderId, user.membershipId!), eq(messages.receiverId, args.withMembershipId)),
-          and(eq(messages.senderId, args.withMembershipId), eq(messages.receiverId, user.membershipId!)),
-        ),
-        limit,
-        offset,
-        orderBy: (m, { asc }) => [asc(m.createdAt)],
-        with: {
-          sender:   { with: { profile: true } },
-          receiver: { with: { profile: true } },
-        },
-      });
+      const where = or(
+        and(eq(messages.senderId, user.membershipId!), eq(messages.receiverId, args.withMembershipId)),
+        and(eq(messages.senderId, args.withMembershipId), eq(messages.receiverId, user.membershipId!)),
+      );
 
+      const [data, total] = await Promise.all([
+        ctx.db.query.messages.findMany({
+          where,
+          limit,
+          offset,
+          orderBy: (m, { asc }) => [asc(m.createdAt)],
+          with: {
+            sender:   { with: { profile: true } },
+            receiver: { with: { profile: true } },
+          },
+        }),
+        ctx.db.select({ count: count() }).from(messages).where(where),
+      ]);
+
+      const totalCount = Number(total[0]?.count ?? 0);
       return {
         data,
         pageInfo: {
-          hasNextPage:     data.length === limit,
+          hasNextPage:     offset + limit < totalCount,
           hasPreviousPage: page > 1,
-          totalCount:      data.length,
+          totalCount,
           currentPage:     page,
-          totalPages:      Math.ceil(data.length / limit),
+          totalPages:      Math.max(1, Math.ceil(totalCount / limit)),
         },
       };
     },
@@ -196,22 +208,28 @@ export const notificationResolvers = {
       const limit  = args.pagination?.limit ?? 20;
       const offset = (page - 1) * limit;
 
-      const data = await ctx.db.query.notifications.findMany({
-        where:   eq(notifications.profileId, user.profileId),
-        limit,
-        offset,
-        orderBy: (n, { desc }) => [desc(n.createdAt)],
-        with: { school: true },
-      });
+      const where = eq(notifications.profileId, user.profileId);
 
+      const [data, total] = await Promise.all([
+        ctx.db.query.notifications.findMany({
+          where,
+          limit,
+          offset,
+          orderBy: (n, { desc }) => [desc(n.createdAt)],
+          with: { school: true },
+        }),
+        ctx.db.select({ count: count() }).from(notifications).where(where),
+      ]);
+
+      const totalCount = Number(total[0]?.count ?? 0);
       return {
         data,
         pageInfo: {
-          hasNextPage:     data.length === limit,
+          hasNextPage:     offset + limit < totalCount,
           hasPreviousPage: page > 1,
-          totalCount:      data.length,
+          totalCount,
           currentPage:     page,
-          totalPages:      Math.ceil(data.length / limit),
+          totalPages:      Math.max(1, Math.ceil(totalCount / limit)),
         },
       };
     },
@@ -231,7 +249,12 @@ export const notificationResolvers = {
 
   Mutation: {
     markNotificationAsRead: async (_: unknown, args: { id: string }, ctx: GraphQLContext) => {
-      requireAuth(ctx);
+      const user = requireAuth(ctx);
+      const notif = await ctx.db.query.notifications.findFirst({ where: eq(notifications.id, args.id) });
+      if (!notif) throw new GraphQLError('Notification introuvable', { extensions: { code: 'NOT_FOUND' } });
+      if (notif.profileId !== user.profileId) {
+        throw new GraphQLError('Accès refusé — permissions insuffisantes.', { extensions: { code: 'FORBIDDEN' } });
+      }
       const [updated] = await ctx.db
         .update(notifications).set({ lu: true }).where(eq(notifications.id, args.id)).returning();
       return updated;

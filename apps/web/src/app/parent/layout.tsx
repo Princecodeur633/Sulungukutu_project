@@ -15,8 +15,8 @@ export default function ParentLayout({ children }: { children: React.ReactNode }
   const { data: cnt } = useQuery(UNREAD_COUNTS_QUERY, {
     variables: { schoolId }, skip: !schoolId, pollInterval: 60_000,
   });
-  const msgBadge   = cnt?.unreadCounts?.messages      ?? 0;
-  const notifBadge = cnt?.unreadCounts?.notifications ?? 0;
+  const msgBadge   = cnt?.unreadMessageCount      ?? 0;
+  const notifBadge = cnt?.unreadNotificationCount ?? 0;
 
   const nav = [{ items: [
     { label: 'Tableau de bord', href: '/parent/dashboard',      icon: 'LayoutDashboard' },

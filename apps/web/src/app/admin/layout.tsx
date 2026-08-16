@@ -20,7 +20,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const { data: cnt } = useQuery(UNREAD_COUNTS_QUERY, {
     variables: { schoolId }, skip: !schoolId, pollInterval: 60_000,
   });
-  const msgBadge = cnt?.unreadCounts?.messages ?? 0;
+  const msgBadge = cnt?.unreadMessageCount ?? 0;
 
   const nav = [
     { group: 'Général', items: [

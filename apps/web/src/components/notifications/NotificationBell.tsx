@@ -10,8 +10,10 @@ import {
   NOTIFICATION_ADDED_SUBSCRIPTION,
   ME_QUERY,
 } from '@/lib/graphql/queries';
-import { tokenStorage } from '@/lib/apollo/client';
-import { Bell, UserX, CreditCard, FileText, MessageSquare, AlertCircle, X, Megaphone } from 'lucide-react';
+import { usePathname } from 'next/navigation';
+import {
+  Bell, X, UserX, CreditCard, FileText, MessageSquare, Megaphone, AlertCircle,
+} from 'lucide-react';
 
 const TYPE_ICONS: Record<string, React.ReactNode> = {
   ABSENCE:  <UserX size={14} className="text-[var(--err)]" />,
@@ -27,6 +29,11 @@ interface NotificationBellProps {
 }
 
 export function NotificationBell({ schoolId }: NotificationBellProps) {
+  const pathname = usePathname();
+  const notifHref = pathname?.startsWith('/teacher') ? '/teacher/notifications'
+    : pathname?.startsWith('/parent') ? '/parent/notifications'
+    : pathname?.startsWith('/student') ? '/student/notifications'
+    : '/admin/dashboard';
   const [open, setOpen]       = useState(false);
   const [pulse, setPulse]     = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -200,7 +207,7 @@ export function NotificationBell({ schoolId }: NotificationBellProps) {
           {/* Footer */}
           <div className="px-4 py-2.5 border-t border-[var(--bd)] text-center">
             <a
-              href="#"
+              href={notifHref}
               className="text-xs text-[var(--tx-primary)] hover:text-[var(--tx-primary)] font-medium"
               onClick={() => setOpen(false)}
             >

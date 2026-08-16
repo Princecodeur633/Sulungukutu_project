@@ -1,5 +1,5 @@
 {
-  "id": "100909f5-d565-490b-9528-ba56f1fb04a1",
+  "id": "0680239a-1c87-43ec-9894-52020fb02023",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -46,6 +46,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -89,7 +95,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "CASCADE",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         },
         "announcements_auteur_id_school_memberships_id_fk": {
@@ -159,6 +165,19 @@
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
         },
         "created_at": {
           "name": "created_at",
@@ -230,7 +249,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "CASCADE",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         },
         "attendances_class_subject_id_class_subjects_id_fk": {
@@ -243,7 +262,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "CASCADE",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         },
         "attendances_marked_by_id_school_memberships_id_fk": {
@@ -407,7 +426,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "CASCADE",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         },
         "audit_logs_actor_id_school_memberships_id_fk": {
@@ -506,7 +525,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "CASCADE",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         },
         "bulletin_details_class_subject_id_class_subjects_id_fk": {
@@ -598,6 +617,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
         "updated_at": {
           "name": "updated_at",
           "type": "timestamp",
@@ -646,7 +671,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "CASCADE",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
@@ -694,6 +719,19 @@
         "hours_per_week": {
           "name": "hours_per_week",
           "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamp",
           "primaryKey": false,
           "notNull": false
         },
@@ -754,7 +792,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "CASCADE",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         },
         "class_subjects_subject_id_subjects_id_fk": {
@@ -767,7 +805,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "CASCADE",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         },
         "class_subjects_teacher_membership_id_school_memberships_id_fk": {
@@ -780,7 +818,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "CASCADE",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
@@ -813,6 +851,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "national_series_id": {
+          "name": "national_series_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "nom": {
           "name": "nom",
           "type": "varchar(50)",
@@ -824,6 +868,19 @@
           "type": "varchar(10)",
           "primaryKey": false,
           "notNull": true
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
         },
         "created_at": {
           "name": "created_at",
@@ -876,7 +933,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "CASCADE",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         },
         "classes_level_id_levels_id_fk": {
@@ -889,7 +946,20 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "CASCADE",
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "classes_national_series_id_national_series_id_fk": {
+          "name": "classes_national_series_id_national_series_id_fk",
+          "tableFrom": "classes",
+          "tableTo": "national_series",
+          "columnsFrom": [
+            "national_series_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
           "onUpdate": "no action"
         }
       },
@@ -959,6 +1029,12 @@
           "notNull": true,
           "default": false
         },
+        "password_changed_at": {
+          "name": "password_changed_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -1022,6 +1098,13 @@
           "columns": [
             "email"
           ]
+        },
+        "global_profiles_phone_unique": {
+          "name": "global_profiles_phone_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "phone"
+          ]
         }
       },
       "policies": {},
@@ -1083,6 +1166,19 @@
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
         },
         "created_at": {
           "name": "created_at",
@@ -1148,7 +1244,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "CASCADE",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         },
         "grades_class_subject_id_class_subjects_id_fk": {
@@ -1161,7 +1257,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "CASCADE",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         },
         "grades_enseignant_id_school_memberships_id_fk": {
@@ -1200,6 +1296,25 @@
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
+        },
+        "national_level_id": {
+          "name": "national_level_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
         },
         "nom": {
           "name": "nom",
@@ -1243,6 +1358,21 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "levels_national_level_idx": {
+          "name": "levels_national_level_idx",
+          "columns": [
+            {
+              "expression": "national_level_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -1256,7 +1386,20 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "CASCADE",
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "levels_national_level_id_national_levels_id_fk": {
+          "name": "levels_national_level_id_national_levels_id_fk",
+          "tableFrom": "levels",
+          "tableTo": "national_levels",
+          "columnsFrom": [
+            "national_level_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
           "onUpdate": "no action"
         }
       },
@@ -1365,7 +1508,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "CASCADE",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         },
         "messages_sender_id_school_memberships_id_fk": {
@@ -1397,6 +1540,287 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.national_curriculum": {
+      "name": "national_curriculum",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "national_level_id": {
+          "name": "national_level_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "national_series_id": {
+          "name": "national_series_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "national_subject_id": {
+          "name": "national_subject_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "coefficient": {
+          "name": "coefficient",
+          "type": "numeric(4, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "volume_horaire_hebdo": {
+          "name": "volume_horaire_hebdo",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "national_curriculum_unique_idx": {
+          "name": "national_curriculum_unique_idx",
+          "columns": [
+            {
+              "expression": "national_level_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "national_series_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "national_subject_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "national_curriculum_national_level_id_national_levels_id_fk": {
+          "name": "national_curriculum_national_level_id_national_levels_id_fk",
+          "tableFrom": "national_curriculum",
+          "tableTo": "national_levels",
+          "columnsFrom": [
+            "national_level_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "national_curriculum_national_series_id_national_series_id_fk": {
+          "name": "national_curriculum_national_series_id_national_series_id_fk",
+          "tableFrom": "national_curriculum",
+          "tableTo": "national_series",
+          "columnsFrom": [
+            "national_series_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "national_curriculum_national_subject_id_national_subjects_id_fk": {
+          "name": "national_curriculum_national_subject_id_national_subjects_id_fk",
+          "tableFrom": "national_curriculum",
+          "tableTo": "national_subjects",
+          "columnsFrom": [
+            "national_subject_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.national_levels": {
+      "name": "national_levels",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "cycle": {
+          "name": "cycle",
+          "type": "level_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "nom": {
+          "name": "nom",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ordre": {
+          "name": "ordre",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "national_levels_cycle_idx": {
+          "name": "national_levels_cycle_idx",
+          "columns": [
+            {
+              "expression": "cycle",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.national_series": {
+      "name": "national_series",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "code": {
+          "name": "code",
+          "type": "varchar(10)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "nom": {
+          "name": "nom",
+          "type": "varchar(150)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "national_series_code_unique": {
+          "name": "national_series_code_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "code"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.national_subjects": {
+      "name": "national_subjects",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "code": {
+          "name": "code",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "nom": {
+          "name": "nom",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "national_subjects_code_unique": {
+          "name": "national_subjects_code_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "code"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -1507,7 +1931,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "CASCADE",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         },
         "notifications_school_id_schools_id_fk": {
@@ -1520,7 +1944,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "CASCADE",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
@@ -1595,7 +2019,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "CASCADE",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         },
         "parent_students_student_id_students_id_fk": {
@@ -1608,12 +2032,237 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "CASCADE",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.payment_transactions": {
+      "name": "payment_transactions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "payment_id": {
+          "name": "payment_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "student_id": {
+          "name": "student_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "montant": {
+          "name": "montant",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "devise": {
+          "name": "devise",
+          "type": "varchar(3)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'XAF'"
+        },
+        "mode": {
+          "name": "mode",
+          "type": "payment_mode",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "canal": {
+          "name": "canal",
+          "type": "transaction_channel",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "statut": {
+          "name": "statut",
+          "type": "transaction_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'EN_ATTENTE'"
+        },
+        "code_echec": {
+          "name": "code_echec",
+          "type": "transaction_failure_code",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "numero_telephone": {
+          "name": "numero_telephone",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "numero_recu": {
+          "name": "numero_recu",
+          "type": "varchar(30)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "transaction_ref": {
+          "name": "transaction_ref",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "agent_id": {
+          "name": "agent_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "observations": {
+          "name": "observations",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "annule_transaction_id": {
+          "name": "annule_transaction_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "payment_transactions_payment_idx": {
+          "name": "payment_transactions_payment_idx",
+          "columns": [
+            {
+              "expression": "payment_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "payment_transactions_student_idx": {
+          "name": "payment_transactions_student_idx",
+          "columns": [
+            {
+              "expression": "student_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "payment_transactions_statut_idx": {
+          "name": "payment_transactions_statut_idx",
+          "columns": [
+            {
+              "expression": "statut",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "payment_transactions_payment_id_payments_id_fk": {
+          "name": "payment_transactions_payment_id_payments_id_fk",
+          "tableFrom": "payment_transactions",
+          "tableTo": "payments",
+          "columnsFrom": [
+            "payment_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "payment_transactions_student_id_students_id_fk": {
+          "name": "payment_transactions_student_id_students_id_fk",
+          "tableFrom": "payment_transactions",
+          "tableTo": "students",
+          "columnsFrom": [
+            "student_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "payment_transactions_agent_id_school_memberships_id_fk": {
+          "name": "payment_transactions_agent_id_school_memberships_id_fk",
+          "tableFrom": "payment_transactions",
+          "tableTo": "school_memberships",
+          "columnsFrom": [
+            "agent_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "payment_transactions_numero_recu_unique": {
+          "name": "payment_transactions_numero_recu_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "numero_recu"
+          ]
+        },
+        "payment_transactions_transaction_ref_unique": {
+          "name": "payment_transactions_transaction_ref_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "transaction_ref"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -1654,6 +2303,20 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'IMPAYE'"
+        },
+        "montant_du": {
+          "name": "montant_du",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "montant_paye": {
+          "name": "montant_paye",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
         },
         "date_paiement": {
           "name": "date_paiement",
@@ -1737,7 +2400,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "CASCADE",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         },
         "payments_updated_by_id_school_memberships_id_fk": {
@@ -1843,7 +2506,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "CASCADE",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
@@ -1966,7 +2629,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "CASCADE",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         },
         "school_memberships_school_id_schools_id_fk": {
@@ -1979,7 +2642,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "CASCADE",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
@@ -2043,6 +2706,12 @@
           "type": "varchar(10)",
           "primaryKey": false,
           "notNull": true
+        },
+        "accent_color": {
+          "name": "accent_color",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": false
         },
         "is_active": {
           "name": "is_active",
@@ -2124,6 +2793,19 @@
           "primaryKey": false,
           "notNull": false
         },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -2175,7 +2857,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "CASCADE",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         },
         "students_class_id_classes_id_fk": {
@@ -2222,6 +2904,25 @@
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
+        },
+        "national_subject_id": {
+          "name": "national_subject_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
         },
         "nom": {
           "name": "nom",
@@ -2271,7 +2972,20 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "CASCADE",
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "subjects_national_subject_id_national_subjects_id_fk": {
+          "name": "subjects_national_subject_id_national_subjects_id_fk",
+          "tableFrom": "subjects",
+          "tableTo": "national_subjects",
+          "columnsFrom": [
+            "national_subject_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
           "onUpdate": "no action"
         }
       },
@@ -2310,6 +3024,10 @@
         "PAYMENT_CREATED",
         "PAYMENT_UPDATED",
         "PAYMENT_EXONERATED",
+        "PAYMENT_TRANSACTION_CREATED",
+        "PAYMENT_TRANSACTION_CANCELLED",
+        "REMOTE_PAYMENT_INITIATED",
+        "REMOTE_PAYMENT_RESOLVED",
         "BULLETIN_GENERATED",
         "BULLETIN_UPDATED",
         "BULLETIN_DELETED",
@@ -2336,7 +3054,12 @@
         "CLASS_SUBJECT_ASSIGNED",
         "CLASS_SUBJECT_UNASSIGNED",
         "ANNOUNCEMENT_CREATED",
-        "ANNOUNCEMENT_DELETED"
+        "ANNOUNCEMENT_DELETED",
+        "IDENTITY_GENERATED",
+        "IDENTITY_CONFLICT_RESOLVED",
+        "SCHOOL_PEDAGOGY_PROVISIONED",
+        "SCHOOL_LEVEL_TOGGLED",
+        "SCHOOL_SUBJECT_TOGGLED"
       ]
     },
     "public.bulletin_status": {
@@ -2418,12 +3141,26 @@
         "TUTEUR"
       ]
     },
+    "public.payment_mode": {
+      "name": "payment_mode",
+      "schema": "public",
+      "values": [
+        "ESPECES",
+        "MOBILE_MONEY",
+        "MOBILE_MONEY_SIMULE",
+        "VIREMENT",
+        "CHEQUE",
+        "AUTRE"
+      ]
+    },
     "public.payment_status": {
       "name": "payment_status",
       "schema": "public",
       "values": [
         "IMPAYE",
+        "PARTIEL",
         "PAYE",
+        "ANNULE",
         "EXONERE"
       ]
     },
@@ -2436,6 +3173,34 @@
         "TEACHER",
         "PARENT",
         "STUDENT"
+      ]
+    },
+    "public.transaction_channel": {
+      "name": "transaction_channel",
+      "schema": "public",
+      "values": [
+        "GUICHET",
+        "DISTANCE"
+      ]
+    },
+    "public.transaction_failure_code": {
+      "name": "transaction_failure_code",
+      "schema": "public",
+      "values": [
+        "SOLDE_INSUFFISANT",
+        "NUMERO_INVALIDE",
+        "ERREUR_RESEAU",
+        "DELAI_EXPIRE"
+      ]
+    },
+    "public.transaction_status": {
+      "name": "transaction_status",
+      "schema": "public",
+      "values": [
+        "EN_ATTENTE",
+        "VALIDEE",
+        "ECHOUEE",
+        "ANNULEE"
       ]
     },
     "public.trimester": {

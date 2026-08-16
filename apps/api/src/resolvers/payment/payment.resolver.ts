@@ -1,4 +1,4 @@
-import { eq, and, inArray, count } from 'drizzle-orm';
+import { eq, and, inArray, count, or } from 'drizzle-orm';
 import { payments, paymentTransactions, notifications, students, parentStudents, schoolMemberships, classes } from '../../db/schema';
 import { requireSchoolMember, requireSchoolAdmin, requireStudentAccess } from '../../middleware/permissions';
 import {
@@ -67,7 +67,7 @@ export const paymentResolvers = {
         where: and(
           eq(payments.mois,          args.mois),
           eq(payments.anneeScolaire, args.anneeScolaire),
-          eq(payments.statut,        'IMPAYE'),
+          or(eq(payments.statut, 'IMPAYE'), eq(payments.statut, 'PARTIEL')),
           inArray(payments.studentId, schoolStudentIds.map((s) => s.id)),
         ),
         with: {
@@ -158,32 +158,64 @@ export const paymentResolvers = {
         });
 
         let result;
-        if (existing) {
+        const existingPayment = existing ?? (await paymentService.getOrCreatePayment(
+          ctx.db, input.studentId, mois, input.anneeScolaire
+        ));
+
+        if (input.statut === 'EXONERE') {
           const [u] = await ctx.db
             .update(payments)
             .set({
-              statut:       input.statut,
-              datePaiement: input.statut === 'PAYE' ? new Date() : null,
-              updatedById:  user.membershipId!,
-              updatedAt:    new Date(),
+              statut:      'EXONERE',
+              updatedById: user.membershipId!,
+              updatedAt:   new Date(),
             })
-            .where(eq(payments.id, existing.id))
+            .where(eq(payments.id, existingPayment.id))
             .returning();
           result = u;
-        } else {
-          const [i] = await ctx.db
-            .insert(payments)
-            .values({
+        } else if (input.statut === 'PAYE') {
+          const due = Number(existingPayment.montantDu) || 0;
+          const paid = Number(existingPayment.montantPaye) || 0;
+          const remaining = Math.max(0, due - paid);
+          if (remaining > 0) {
+            const recorded = await paymentService.recordManualPayment(ctx.db, {
               studentId:     input.studentId,
               mois,
               anneeScolaire: input.anneeScolaire,
-              statut:        input.statut,
-              datePaiement:  input.statut === 'PAYE' ? new Date() : null,
-              updatedById:   user.membershipId!,
+              montant:       remaining,
+              mode:          'AUTRE',
+              agentId:       user.membershipId!,
+              observations:  'Soldé par l’administration',
+            });
+            result = recorded.payment;
+          } else {
+            result = existingPayment;
+          }
+        } else if (input.statut === 'IMPAYE') {
+          if (Number(existingPayment.montantPaye) > 0) {
+            throw new GraphQLError(
+              'Impossible de repasser en impayé : des encaissements existent. Annulez les transactions.',
+              { extensions: { code: 'BAD_USER_INPUT' } }
+            );
+          }
+          const [u] = await ctx.db
+            .update(payments)
+            .set({
+              statut:       'IMPAYE',
+              datePaiement: null,
+              updatedById:  user.membershipId!,
+              updatedAt:    new Date(),
             })
+            .where(eq(payments.id, existingPayment.id))
             .returning();
-          result = i;
+          result = u;
+        } else {
+          throw new GraphQLError(
+            'Utilisez un encaissement au guichet pour un paiement partiel.',
+            { extensions: { code: 'BAD_USER_INPUT' } }
+          );
         }
+        if (!result) continue;
         updated.push(result);
 
         await auditService.log(ctx.db, {
@@ -229,7 +261,7 @@ export const paymentResolvers = {
 
       // Notifier via subscription
       pubsub.publish('PAYMENT_STATUS', input.studentId, {
-        paymentStatusChanged: updated,
+        paymentStatusChanged: updated[updated.length - 1],
       });
 
       return updated;

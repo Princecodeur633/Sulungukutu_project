@@ -208,14 +208,14 @@ export default function TeacherBulletinsPage() {
                         </span>
                       </td>
                       <td className="table-cell text-center">
-                        {published && b.pdfUrl ? (
-                          <button
-                            onClick={() => window.open(b.pdfUrl, '_blank')}
-                            className="p-1.5 rounded-lg bg-[var(--info-bg)] hover:bg-[var(--info-bg)] text-[var(--tx-primary)] transition-colors"
-                            title="Télécharger le PDF"
-                          >
-                            <Download size={14} />
-                          </button>
+                        {b.statut === 'PUBLIE' ? (
+                          <BulletinDownloadButton
+                            bulletinId={b.id}
+                            pdfUrl={b.pdfUrl}
+                            isDownloadable={b.isDownloadable !== false}
+                            size="sm"
+                            variant="icon"
+                          />
                         ) : (
                           <span className="text-[var(--tx-muted)]">
                             <Lock size={14} />

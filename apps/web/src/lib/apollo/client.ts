@@ -56,6 +56,40 @@ export const apolloErrorBus = {
   },
 };
 
+let refreshInFlight: Promise<boolean> | null = null;
+
+async function tryRefreshSession(): Promise<boolean> {
+  if (refreshInFlight) return refreshInFlight;
+  refreshInFlight = (async () => {
+    const rt = tokenStorage.getRefresh();
+    if (!rt) return false;
+    try {
+      const res = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: 'mutation RefreshToken($token: String!) { refreshToken(token: $token) { accessToken refreshToken currentMembership { school { id } } } }',
+          variables: { token: rt },
+        }),
+      });
+      const json = await res.json();
+      const payload = json?.data?.refreshToken;
+      if (!payload?.accessToken) return false;
+      tokenStorage.set(payload.accessToken);
+      if (payload.refreshToken) tokenStorage.setRefresh(payload.refreshToken);
+      if (payload.currentMembership?.school?.id) {
+        tokenStorage.setSchoolId(payload.currentMembership.school.id);
+      }
+      return true;
+    } catch {
+      return false;
+    } finally {
+      refreshInFlight = null;
+    }
+  })();
+  return refreshInFlight;
+}
+
 const errorLink = onError(({ graphQLErrors, networkError }) => {
   if (networkError) {
     const msg =
@@ -66,13 +100,23 @@ const errorLink = onError(({ graphQLErrors, networkError }) => {
   }
   if (graphQLErrors) {
     for (const err of graphQLErrors) {
-      // Ne pas afficher les erreurs d'auth (gérées par le middleware)
-      if (err.extensions?.code === 'UNAUTHENTICATED') continue;
+      if (err.extensions?.code === 'UNAUTHENTICATED') {
+        if (typeof window !== 'undefined') {
+          tryRefreshSession().then((ok) => {
+            if (!ok) {
+              tokenStorage.clear();
+              window.location.href = '/auth/login?session_expired=1';
+            } else {
+              window.location.reload();
+            }
+          });
+        }
+        continue;
+      }
       if (err.extensions?.code === 'FORBIDDEN') {
         apolloErrorBus.emit('Accès refusé — permissions insuffisantes');
         continue;
       }
-      // Erreur métier : afficher le message GraphQL
       apolloErrorBus.emit(err.message || 'Une erreur est survenue');
     }
   }
@@ -136,15 +180,24 @@ export const tokenStorage = {
   set: (token: string) => {
     if (typeof window !== 'undefined') {
       localStorage.setItem('sulungukutu_token', token);
-      // Cookie lisible par le middleware Next.js (pas httpOnly — client-side only)
       const payload = decodeJwtPayload(token);
       const maxAge  = payload?.exp
         ? payload.exp - Math.floor(Date.now() / 1000)
         : 7 * 24 * 3600;
       const role    = payload?.role ?? '';
-      document.cookie = `edu_token=${token}; path=/; max-age=${maxAge}; SameSite=Strict`;
-      document.cookie = `edu_role=${role}; path=/; max-age=${maxAge}; SameSite=Strict`;
+      const secure  = window.location.protocol === 'https:' ? '; Secure' : '';
+      document.cookie = `edu_token=${token}; path=/; max-age=${maxAge}; SameSite=Strict${secure}`;
+      document.cookie = `edu_role=${role}; path=/; max-age=${maxAge}; SameSite=Strict${secure}`;
     }
+  },
+  setRefresh: (token: string) => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('sulungukutu_refresh_token', token);
+    }
+  },
+  getRefresh: (): string | null => {
+    if (typeof window === 'undefined') return null;
+    return localStorage.getItem('sulungukutu_refresh_token');
   },
   get: (): string | null => {
     if (typeof window !== 'undefined') {
@@ -163,6 +216,7 @@ export const tokenStorage = {
     if (typeof window !== 'undefined') {
       localStorage.removeItem('sulungukutu_token');
       localStorage.removeItem('sulungukutu_school_id');
+      localStorage.removeItem('sulungukutu_refresh_token');
       document.cookie = 'edu_token=; path=/; max-age=0';
       document.cookie = 'edu_role=; path=/; max-age=0';
     }

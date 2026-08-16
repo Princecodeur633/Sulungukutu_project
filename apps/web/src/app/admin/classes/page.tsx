@@ -14,7 +14,7 @@ import { tokenStorage } from '@/lib/apollo/client';
 import { useToast } from '@/components/ui/Toast';
 
 const LEVEL_TYPE_LABELS: Record<string, string> = {
-  PRIMAIRE: 'Primaire', COLLEGE: 'Collège', LYCEE: 'Lycée', UNIVERSITAIRE: 'Université',
+  PRIMAIRE: 'Primaire', COLLEGE: 'Collège', LYCEE: 'Lycée',
 };
 
 function ManageClassDrawer({
@@ -398,7 +398,6 @@ export default function AdminClassesPage() {
                   <option value="PRIMAIRE">Primaire</option>
                   <option value="COLLEGE">Collège</option>
                   <option value="LYCEE">Lycée</option>
-                  <option value="UNIVERSITAIRE">Universitaire</option>
                 </select>
               </div>
             </div>

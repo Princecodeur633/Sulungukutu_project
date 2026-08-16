@@ -37,6 +37,7 @@ export default function WorkspacePage() {
   const [memberships, setMemberships] = useState<any[]>([]);
   const [loading, setLoading]         = useState(false);
   const [selected, setSelected]       = useState<string | null>(null);
+  const [error, setError]             = useState('');
 
   const [switchWorkspace] = useMutation(SWITCH_WORKSPACE_MUTATION);
 
@@ -53,6 +54,7 @@ export default function WorkspacePage() {
     setSelected(membership.id);
     setLoading(true);
 
+    setError('');
     try {
       const { data } = await switchWorkspace({
         variables: { schoolId: membership.school.id },
@@ -61,13 +63,17 @@ export default function WorkspacePage() {
       if (data?.switchWorkspace?.accessToken) {
         await apolloClient.clearStore();
         tokenStorage.set(data.switchWorkspace.accessToken);
+        if (data.switchWorkspace.refreshToken) {
+          tokenStorage.setRefresh(data.switchWorkspace.refreshToken);
+        }
         tokenStorage.setSchoolId(membership.school.id);
         sessionStorage.removeItem('pending_memberships');
+        sessionStorage.removeItem('pending_refresh_token');
 
         router.push(ROLE_DASHBOARDS[membership.role] ?? '/');
       }
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      setError(err?.graphQLErrors?.[0]?.message ?? "Impossible de changer d'établissement.");
       setLoading(false);
       setSelected(null);
     }
@@ -92,6 +98,9 @@ export default function WorkspacePage() {
             Vous avez accès à plusieurs établissements. Sélectionnez celui
             dans lequel vous souhaitez travailler.
           </p>
+          {error && (
+            <p className="mt-3 text-sm text-[var(--err)]">{error}</p>
+          )}
         </div>
 
         {/* Liste workspaces */}

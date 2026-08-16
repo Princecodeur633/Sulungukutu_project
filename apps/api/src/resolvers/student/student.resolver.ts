@@ -6,7 +6,7 @@ import { and, count, eq, ilike, sql, isNull, or } from 'drizzle-orm';
 import { GraphQLError } from 'graphql';
 import {
   students, globalProfiles, schoolMemberships,
-  parentStudents, payments, notifications, attendances, schools, classes,
+  parentStudents, payments, notifications, attendances, schools, classes, bulletins,
 } from '../../db/schema';
 import { requireSchoolMember, requireAdminOrTeacher, requireSchoolAdmin, requireStudentAccess } from '../../middleware/permissions';
 import { CreateStudentSchema } from '../../utils/validators/schemas';
@@ -208,6 +208,7 @@ export const studentResolvers = {
           membership: { with: { profile: true } },
           class: true,
           grades: {
+            where: (g, { isNull: n }) => n(g.deletedAt),
             with: { classSubject: { with: { subject: true } } },
           },
           attendances: true,
@@ -247,6 +248,15 @@ export const studentResolvers = {
         moyenne:   v.sum / v.count,
       }));
 
+      const latestBulletin = await ctx.db.query.bulletins.findFirst({
+        where: and(
+          eq(bulletins.studentId, args.studentId),
+          eq(bulletins.anneeScolaire, args.anneeScolaire),
+          isNull(bulletins.deletedAt),
+        ),
+        orderBy: (b, { desc }) => [desc(b.generatedAt)],
+      });
+
       // Absences par mois
       const absByMonth: Record<number, number> = {};
       for (const a of ((student as any).attendances as any[] ?? [])) { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -264,8 +274,8 @@ export const studentResolvers = {
         moyennesParMatiere,
         moyennesParTrimestre,
         absencesParMois,
-        rang:    null,
-        mention: null,
+        rang:    latestBulletin?.rang ?? null,
+        mention: latestBulletin?.mention ?? null,
       };
     },
 
@@ -744,12 +754,18 @@ export const studentResolvers = {
         .onConflictDoNothing()
         .returning();
 
+      if (!link) {
+        throw new GraphQLError('Ce parent est déjà rattaché à cet élève.', {
+          extensions: { code: 'BAD_USER_INPUT' },
+        });
+      }
+
       await auditService.log(ctx.db, {
         schoolId,
         actorId:     user.membershipId,
         action:      'USER_UPDATED',
         entityType:  'parentStudent',
-        entityId:    link?.id ?? args.input.studentId,
+        entityId:    link.id,
         newValue:    { parentMembershipId: args.input.parentMembershipId, studentId: args.input.studentId, lien: args.input.lien },
         description: 'Parent rattaché à un élève',
       });

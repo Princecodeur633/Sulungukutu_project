@@ -151,8 +151,8 @@ export const paymentService = {
       t1Unlocked,
       t2Unlocked,
       t3Unlocked,
-      totalPaid:    allPayments.filter((p) => p.statut === 'PAYE').length,
-      totalUnpaid:  allPayments.filter((p) => p.statut === 'IMPAYE').length,
+      totalPaid:    allPayments.filter((p) => p.statut === 'PAYE' || p.statut === 'EXONERE').length,
+      totalUnpaid:  allPayments.filter((p) => p.statut === 'IMPAYE' || p.statut === 'PARTIEL').length,
     };
   },
 
@@ -321,6 +321,16 @@ export const paymentService = {
     }
     if (original.statut !== 'VALIDEE') {
       throw new Error('Seule une transaction validée peut être annulée');
+    }
+
+    const alreadyReversed = await db.query.paymentTransactions.findFirst({
+      where: and(
+        eq(paymentTransactions.annuleTransactionId, original.id),
+        eq(paymentTransactions.statut, 'ANNULEE'),
+      ),
+    });
+    if (alreadyReversed) {
+      throw new Error('Cette transaction a déjà été annulée');
     }
 
     const [reversal] = await db

@@ -11,11 +11,11 @@ import { Megaphone, Plus, Edit, Trash2, Clock, Users } from 'lucide-react';
 
 const CIBLE_LABELS: Record<string, string> = {
   ALL: 'Tous', PARENTS: 'Parents', TEACHERS: 'Enseignants',
-  STUDENTS: 'Élèves', STAFF: 'Personnel',
+  STUDENTS: 'Élèves', ADMINS: 'Administration',
 };
 const CIBLE_COLORS: Record<string, string> = {
   ALL: 'badge-info', PARENTS: 'badge-warning', TEACHERS: 'badge-success',
-  STUDENTS: 'bg-[var(--bg-subtle)] text-[var(--tx-secondary)]', STAFF: 'badge-neutral',
+  STUDENTS: 'bg-[var(--bg-subtle)] text-[var(--tx-secondary)]', ADMINS: 'badge-neutral',
 };
 
 function AnnouncementModal({
@@ -105,6 +105,7 @@ export default function AdminAnnouncementsPage() {
 
   const { addToast: notifyDelete } = useToast();
   const handleDelete = async (id: string) => {
+    if (!window.confirm('Supprimer cette annonce ?')) return;
     try {
       await deleteAnn({ variables: { id } });
       notifyDelete({ type: 'success', title: 'Annonce supprimée' });

@@ -1,4 +1,4 @@
-import { eq, and, avg, inArray } from 'drizzle-orm';
+import { eq, and, inArray, isNull } from 'drizzle-orm';
 import {
   bulletins,
   bulletinDetails,
@@ -19,6 +19,7 @@ type Trimester = 'T1' | 'T2' | 'T3';
 interface BulletinGenerationResult {
   generated: number;
   errors:    string[];
+  studentIds: string[];
 }
 
 export const bulletinService = {
@@ -31,16 +32,14 @@ export const bulletinService = {
     trimestre: Trimester,
     anneeScolaire: string
   ): Promise<BulletinGenerationResult> => {
-    const result: BulletinGenerationResult = { generated: 0, errors: [] };
+    const result: BulletinGenerationResult = { generated: 0, errors: [], studentIds: [] };
 
-    // Récupérer tous les élèves de la classe
     const classStudents = await db.query.students.findMany({
-      where: eq(students.classId, classId),
+      where: and(eq(students.classId, classId), isNull(students.deletedAt)),
     });
 
-    // Récupérer les matières de la classe
     const classSubs = await db.query.classSubjects.findMany({
-      where: eq(classSubjects.classId, classId),
+      where: and(eq(classSubjects.classId, classId), isNull(classSubjects.deletedAt)),
       with:  { subject: true },
     });
 
@@ -67,6 +66,7 @@ export const bulletinService = {
             studentId:       student.id,
             moyenneGenerale: Number(bulletin.moyenneGenerale),
           });
+          result.studentIds.push(student.id);
           result.generated++;
         }
       } catch (err) {
@@ -74,7 +74,40 @@ export const bulletinService = {
       }
     }
 
-    // Calculer et mettre à jour les rangs
+    await bulletinService.updateRanks(db, classId, trimestre, anneeScolaire, studentAverages);
+
+    return result;
+  },
+
+  updateRanks: async (
+    db: DB,
+    classId: string,
+    trimestre: Trimester,
+    anneeScolaire: string,
+    precomputed?: Array<{ studentId: string; moyenneGenerale: number }>
+  ) => {
+    let studentAverages = precomputed;
+    if (!studentAverages) {
+      const classStudents = await db.query.students.findMany({
+        where: and(eq(students.classId, classId), isNull(students.deletedAt)),
+        columns: { id: true },
+      });
+      const ids = classStudents.map((s) => s.id);
+      if (ids.length === 0) return;
+      const rows = await db.query.bulletins.findMany({
+        where: and(
+          inArray(bulletins.studentId, ids),
+          eq(bulletins.trimestre, trimestre),
+          eq(bulletins.anneeScolaire, anneeScolaire),
+          isNull(bulletins.deletedAt),
+        ),
+        columns: { studentId: true, moyenneGenerale: true },
+      });
+      studentAverages = rows
+        .filter((b) => b.moyenneGenerale != null)
+        .map((b) => ({ studentId: b.studentId, moyenneGenerale: Number(b.moyenneGenerale) }));
+    }
+
     studentAverages.sort((a, b) => b.moyenneGenerale - a.moyenneGenerale);
     for (let i = 0; i < studentAverages.length; i++) {
       await db
@@ -88,8 +121,6 @@ export const bulletinService = {
           )
         );
     }
-
-    return result;
   },
 
   /**
@@ -124,7 +155,8 @@ export const bulletinService = {
         where: and(
           eq(grades.studentId, studentId),
           eq(grades.classSubjectId, cs.id),
-          eq(grades.trimestre, trimestre)
+          eq(grades.trimestre, trimestre),
+          isNull(grades.deletedAt),
         ),
       });
 

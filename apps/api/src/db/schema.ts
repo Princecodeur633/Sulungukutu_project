@@ -195,6 +195,9 @@ export const globalProfiles = pgTable(
     phone:        varchar('phone', { length: 20 }).unique(),
     avatarUrl:    text('avatar_url'),
     isSuperAdmin: boolean('is_super_admin').default(false).notNull(),
+    // Permet d'invalider les JWT déjà émis après un changement de mot de passe
+    // (comparaison avec le claim `iat` du token).
+    passwordChangedAt: timestamp('password_changed_at'),
     createdAt:    timestamp('created_at').defaultNow().notNull(),
     updatedAt:    timestamp('updated_at').defaultNow().notNull(),
   },
@@ -215,6 +218,7 @@ export const schools = pgTable(
     adresse:       text('adresse'),
     telephone:     varchar('telephone', { length: 20 }),
     anneeScolaire: varchar('annee_scolaire', { length: 10 }).notNull(),
+    accentColor:   varchar('accent_color', { length: 20 }),
     isActive:      boolean('is_active').default(true).notNull(),
     createdAt:     timestamp('created_at').defaultNow().notNull(),
     updatedAt:     timestamp('updated_at').defaultNow().notNull(),

@@ -42,7 +42,7 @@ export const CreateSchoolSchema = z.object({
 export const CreateLevelSchema = z.object({
   schoolId: z.string().uuid(),
   nom:      z.string().min(1).max(100),
-  type:     z.enum(['PRIMAIRE', 'COLLEGE', 'LYCEE', 'UNIVERSITAIRE']),
+  type:     z.enum(['PRIMAIRE', 'COLLEGE', 'LYCEE']),
   ordre:    z.number().int().min(1),
 });
 

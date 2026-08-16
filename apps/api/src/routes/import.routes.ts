@@ -4,7 +4,7 @@ import { parse as parseUrl } from "url";
 import { db } from "../db";
 import { eq, and, or, sql } from "drizzle-orm";
 import { globalProfiles, schoolMemberships, students, parentStudents, classes } from "../db/schema";
-import { verifyAccessToken } from "../utils/jwt";
+import { authenticateHttpRequest, requireHttpRole, requireHttpSchoolMember, sendHttpAuthError } from "../middleware/http-auth";
 import { normalizePhone } from "../utils/phone";
 import { enforceRateLimit } from "../middleware/rate-limit";
 import * as bcrypt from "bcryptjs";
@@ -40,28 +40,18 @@ export function handleImportRoute(req:IncomingMessage,res:ServerResponse):boolea
   }
 
   const tok=url.query.token as string,sid=url.query.schoolId as string,cid=url.query.classId as string|undefined;
-  if(!tok||!sid){res.writeHead(400,{"Content-Type":"application/json"});res.end(JSON.stringify({error:"token+schoolId requis"}));return true;}
+  if(!sid){res.writeHead(400,{"Content-Type":"application/json"});res.end(JSON.stringify({error:"schoolId requis"}));return true;}
 
-  // AVANT : le token était vérifié comme valide, mais son contenu (rôle,
-  // école) n'était JAMAIS utilisé — n'importe quel utilisateur connecté
-  // (même un élève) pouvait importer des élèves dans N'IMPORTE QUELLE
-  // école en changeant juste le paramètre schoolId. Corrigé : on exige un
-  // rôle admin ET que l'école du token corresponde à celle de l'import
-  // (le Super Admin passe outre cette dernière vérification).
-  let decoded: any;
-  try { decoded = verifyAccessToken(tok); } catch {
-    res.writeHead(401,{"Content-Type":"application/json"});res.end(JSON.stringify({error:"Token invalide"}));return true;
-  }
-  if (decoded.role !== 'SUPER_ADMIN' && decoded.role !== 'ADMIN') {
-    res.writeHead(403,{"Content-Type":"application/json"});
-    res.end(JSON.stringify({error:"Accès refusé — réservé aux administrateurs."}));return true;
-  }
-  if (decoded.role === 'ADMIN' && decoded.schoolId !== sid) {
-    res.writeHead(403,{"Content-Type":"application/json"});
-    res.end(JSON.stringify({error:"Vous ne pouvez importer des élèves que dans votre propre établissement."}));return true;
-  }
+  authenticateHttpRequest(req).then((decoded) => {
+    requireHttpRole(decoded, 'ADMIN', 'SUPER_ADMIN');
+    requireHttpSchoolMember(decoded, sid);
 
-  const ch:Buffer[]=[];req.on("data",(c:Buffer)=>ch.push(c));req.on("end",()=>{processImport(Buffer.concat(ch).toString("utf8"),sid,cid).then(r=>{res.writeHead(200,{"Content-Type":"application/json","Access-Control-Allow-Origin":FE});res.end(JSON.stringify(r));}).catch(e=>{res.writeHead(500,{"Content-Type":"application/json","Access-Control-Allow-Origin":FE});res.end(JSON.stringify({error:e.message}));});});
+    const ch:Buffer[]=[];req.on("data",(c:Buffer)=>ch.push(c));req.on("end",()=>{processImport(Buffer.concat(ch).toString("utf8"),sid,cid).then(r=>{res.writeHead(200,{"Content-Type":"application/json","Access-Control-Allow-Origin":FE});res.end(JSON.stringify(r));}).catch(e=>{res.writeHead(500,{"Content-Type":"application/json","Access-Control-Allow-Origin":FE});res.end(JSON.stringify({error:e.message}));});});
+  }).catch((err) => {
+    if (sendHttpAuthError(res, err, {"Access-Control-Allow-Origin":FE})) return;
+    res.writeHead(500,{"Content-Type":"application/json","Access-Control-Allow-Origin":FE});
+    res.end(JSON.stringify({error:"Erreur interne"}));
+  });
   return true;
 }
 

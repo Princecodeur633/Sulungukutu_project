@@ -214,11 +214,11 @@ export async function sendPasswordReset(params: {
       <div class="value">${params.newPassword}</div>
     </div>
     <p><strong>Important :</strong> Changez ce mot de passe après votre prochaine connexion.</p>
-    <a href="${APP_URL}/login" class="btn">Se connecter →</a>
+    <a href="${APP_URL}/auth/login" class="btn">Se connecter →</a>
     `;
     creds = { email: params.to, 'nouveau mot de passe': params.newPassword };
   } else {
-    const url = `${APP_URL}/reset-password?token=${params.token}`;
+    const url = `${APP_URL}/auth/reset-password?token=${params.token}`;
     bodyHtml = `
     <h2>Réinitialisation de mot de passe</h2>
     <p>Bonjour <strong>${params.prenom}</strong>,</p>

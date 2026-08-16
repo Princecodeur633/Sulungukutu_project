@@ -35,6 +35,7 @@ export const SWITCH_WORKSPACE_MUTATION = gql`
   mutation SwitchWorkspace($schoolId: ID!) {
     switchWorkspace(schoolId: $schoolId) {
       accessToken
+      refreshToken
       membership {
         id
         role
@@ -149,7 +150,7 @@ export const PARENT_DASHBOARD_QUERY = gql`
         student {
           id
           matricule
-          class { nom }
+          class { nom level { nom } }
           membership {
             profile { nom prenom avatarUrl }
           }
@@ -360,7 +361,7 @@ export const MARK_ATTENDANCE_MUTATION = gql`
 `;
 
 export const ATTENDANCE_BY_CLASS_SUBJECT_QUERY = gql`
-  query AttendanceByClassSubject($classSubjectId: ID!, $date: DateTime!) {
+  query AttendanceByClassSubject($classSubjectId: ID!, $date: String!) {
     attendanceByClassSubject(classSubjectId: $classSubjectId, date: $date) {
       id
       statut
@@ -840,7 +841,7 @@ export const ANNOUNCEMENTS_QUERY = gql`
 export const BULLETINS_BY_CLASS_QUERY = gql`
   query BulletinsByClass($classId: ID!, $trimestre: Trimester!, $anneeScolaire: String!) {
     bulletinsByClass(classId: $classId, trimestre: $trimestre, anneeScolaire: $anneeScolaire) {
-      id trimestre statut moyenneGenerale rang mention isDownloadable generatedAt
+      id trimestre statut moyenneGenerale rang mention isDownloadable pdfUrl generatedAt
       student {
         id matricule
         membership { profile { nom prenom } }
@@ -1006,6 +1007,26 @@ export const REQUEST_PASSWORD_RESET_MUTATION = gql`
   }
 `;
 
+export const CONFIRM_PASSWORD_RESET_MUTATION = gql`
+  mutation ConfirmPasswordReset($token: String!, $newPassword: String!) {
+    confirmPasswordReset(token: $token, newPassword: $newPassword)
+  }
+`;
+
+export const REFRESH_TOKEN_MUTATION = gql`
+  mutation RefreshToken($token: String!) {
+    refreshToken(token: $token) {
+      accessToken
+      refreshToken
+      currentMembership {
+        id
+        role
+        school { id nom }
+      }
+    }
+  }
+`;
+
 export const ADMIN_RESET_PASSWORD_MUTATION = gql`
   mutation AdminResetPassword($membershipId: ID!) {
     adminResetPassword(membershipId: $membershipId) {
@@ -1068,7 +1089,7 @@ export const ALL_SCHOOLS_QUERY = gql`
 export const MY_SCHOOL_QUERY = gql`
   query MySchool($schoolId: ID!) {
     mySchool(schoolId: $schoolId) {
-      id nom anneeScolaire
+      id nom anneeScolaire accentColor logoUrl
     }
   }
 `;
@@ -1164,7 +1185,7 @@ export const CLASS_SUBJECTS_WITH_GRADES_QUERY = gql`
 
 export const CLASS_SUBJECTS_BY_TEACHER_FILTER_QUERY = gql`
   query ClassSubjectsByTeacherInSchool($schoolId: ID!, $membershipId: ID!) {
-    classSubjectsByTeacherInSchool(schoolId: $schoolId, membershipId: $membershipId) {
+    classSubjectsByTeacher(schoolId: $schoolId) {
       id coefficient
       class { nom }
       subject { nom }

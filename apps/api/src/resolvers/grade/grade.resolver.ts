@@ -1,4 +1,4 @@
-import { eq, and, inArray, isNull } from 'drizzle-orm';
+import { eq, and, inArray, isNull, count } from 'drizzle-orm';
 import { grades, students, classSubjects, classes } from '../../db/schema';
 import { requireAdminOrTeacher, requireSchoolMember } from '../../middleware/permissions';
 import { CreateGradeSchema, BulkCreateGradesSchema } from '../../utils/validators/schemas';
@@ -54,26 +54,30 @@ export const gradeResolvers = {
 
       const where = and(...conditions);
 
-      const data = await ctx.db.query.grades.findMany({
-        where,
-        limit,
-        offset,
-        orderBy: (g, { desc }) => [desc(g.dateSaisie)],
-        with: {
-          student:      { with: { membership: { with: { profile: true } } } },
-          classSubject: { with: { subject: true } },
-          enseignant:   { with: { profile: true } },
-        },
-      });
+      const [data, total] = await Promise.all([
+        ctx.db.query.grades.findMany({
+          where,
+          limit,
+          offset,
+          orderBy: (g, { desc }) => [desc(g.dateSaisie)],
+          with: {
+            student:      { with: { membership: { with: { profile: true } } } },
+            classSubject: { with: { subject: true } },
+            enseignant:   { with: { profile: true } },
+          },
+        }),
+        ctx.db.select({ count: count() }).from(grades).where(where),
+      ]);
 
+      const totalCount = Number(total[0]?.count ?? 0);
       return {
         data,
         pageInfo: {
-          hasNextPage: data.length === limit,
+          hasNextPage:     offset + limit < totalCount,
           hasPreviousPage: page > 1,
-          totalCount:  data.length,
-          currentPage: page,
-          totalPages:  Math.ceil(data.length / limit),
+          totalCount,
+          currentPage:     page,
+          totalPages:      Math.max(1, Math.ceil(totalCount / limit)),
         },
       };
     },
@@ -174,6 +178,16 @@ export const gradeResolvers = {
       const targetSchoolId = (targetClassSubject as any).class.schoolId;
       requireSchoolMember(ctx, targetSchoolId);
 
+      const studentRow = await ctx.db.query.students.findFirst({ where: eq(students.id, input.studentId) });
+      if (!studentRow || studentRow.deletedAt) {
+        throw new GraphQLError('Élève introuvable', { extensions: { code: 'NOT_FOUND' } });
+      }
+      if (studentRow.classId !== targetClassSubject.classId) {
+        throw new GraphQLError("Cet élève n'appartient pas à la classe de cette matière.", {
+          extensions: { code: 'BAD_USER_INPUT' },
+        });
+      }
+
       const [created] = await ctx.db
         .insert(grades)
         .values({
@@ -224,6 +238,16 @@ export const gradeResolvers = {
       }
       const targetSchoolId = (targetClassSubject as any).class.schoolId;
       requireSchoolMember(ctx, targetSchoolId);
+
+      const studentIds = new Set(input.grades.map((g) => g.studentId));
+      const classStudents = await ctx.db.query.students.findMany({
+        where: inArray(students.id, [...studentIds]),
+      });
+      if (classStudents.some((s) => s.classId !== targetClassSubject.classId || s.deletedAt)) {
+        throw new GraphQLError("Un ou plusieurs élèves n'appartiennent pas à cette classe.", {
+          extensions: { code: 'BAD_USER_INPUT' },
+        });
+      }
 
       const values = input.grades.map((g) => ({
         studentId:      g.studentId,

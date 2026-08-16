@@ -1,5 +1,5 @@
 import { and, eq, inArray, isNull } from 'drizzle-orm';
-import { bulletins, notifications, parentStudents, students, classes } from '../../db/schema';
+import { bulletins, notifications, parentStudents, students, classes, classSubjects } from '../../db/schema';
 import { requireAdmin, requireSchoolMember, requireSchoolAdmin, requireAuth, requireStudentAccess } from '../../middleware/permissions';
 import { GenerateBulletinsSchema } from '../../utils/validators/schemas';
 import { bulletinService } from '../../services/bulletin.service';
@@ -136,8 +136,10 @@ export const bulletinResolvers = {
 
       return ctx.db.query.bulletins.findMany({
         where: and(
+          inArray(bulletins.studentId, result.studentIds.length > 0 ? result.studentIds : ['00000000-0000-0000-0000-000000000000']),
           eq(bulletins.trimestre, input.trimestre as typeof bulletins.trimestre._.data),
           eq(bulletins.anneeScolaire, input.anneeScolaire),
+          isNull(bulletins.deletedAt),
         ),
         with: {
           student: { with: { membership: { with: { profile: true } } } },
@@ -178,8 +180,14 @@ export const bulletinResolvers = {
     },
 
     generateBulletinPdf: async (_: unknown, args: { bulletinId: string }, ctx: GraphQLContext) => {
-      requireAuth(ctx);
-      // Mettre à jour pdfUrl pour pointer vers la route de génération
+      const target = await ctx.db.query.bulletins.findFirst({
+        where: eq(bulletins.id, args.bulletinId),
+        with: { student: { with: { class: true } } },
+      });
+      if (!target) throw new GraphQLError('Bulletin introuvable', { extensions: { code: 'NOT_FOUND' } });
+      const targetSchoolId = (target as any).student.class.schoolId;
+      await requireStudentAccess(ctx, target.studentId, targetSchoolId);
+
       const pdfUrl = `/pdf/bulletin/${args.bulletinId}`;
       const [updated] = await ctx.db
         .update(bulletins)
@@ -281,12 +289,22 @@ export const bulletinResolvers = {
       const targetSchoolId = (old as any).student.class.schoolId;
       const user = requireSchoolAdmin(ctx, targetSchoolId);
 
-      // Supprimer l'ancien et régénérer
-      await ctx.db.delete(bulletins).where(eq(bulletins.id, args.id));
-
-      await bulletinService.generateForClass(
+      const classId = (old as BulletinData).student?.classId ?? "";
+      const classSubs = await ctx.db.query.classSubjects.findMany({
+        where: and(eq(classSubjects.classId, classId), isNull(classSubjects.deletedAt)),
+        with: { subject: true },
+      });
+      await bulletinService.generateForStudent(
         ctx.db,
-        (old as BulletinData).student?.classId ?? "",
+        old.studentId,
+        classId,
+        classSubs,
+        old.trimestre as 'T1' | 'T2' | 'T3',
+        old.anneeScolaire
+      );
+      await bulletinService.updateRanks(
+        ctx.db,
+        classId,
         old.trimestre as 'T1' | 'T2' | 'T3',
         old.anneeScolaire
       );

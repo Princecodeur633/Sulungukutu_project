@@ -34,6 +34,11 @@ import { handleExport }          from './routes/export.routes';
 import { handlePdfRoute }          from './routes/pdf.routes';
 import { handleMailViewer }      from './routes/mail-viewer.routes';
 import { handleImportRoute }     from './routes/import.routes';
+import { GraphQLError } from 'graphql';
+import { eq } from 'drizzle-orm';
+import { classSubjects, paymentTransactions } from './db/schema';
+import { requireAuth, requireSchoolMember, requireStudentAccess } from './middleware/permissions';
+import type { GraphQLContext } from './middleware/auth';
 
 // ── Charger le schéma GraphQL ─────────────────────────────────
 const typeDefs = readFileSync(
@@ -106,51 +111,107 @@ const resolvers = {
     recuUrl: (payment: any) =>
       ['PAYE', 'EXONERE'].includes(payment.statut) ? `/pdf/recu/${payment.id}` : null,
   },
+  PaymentTransaction: {
+    recuUrl: (tx: any) =>
+      tx.statut === 'VALIDEE' && tx.paymentId ? `/pdf/recu/${tx.paymentId}` : null,
+  },
 
   Subscription: {
     notificationAdded: {
-      subscribe: (_: unknown, args: { profileId: string }) =>
-        pubsub.subscribe('NOTIFICATION_ADDED', args.profileId),
+      subscribe: (_: unknown, args: { profileId: string }, ctx: GraphQLContext) => {
+        const user = requireAuth(ctx);
+        if (args.profileId !== user.profileId) {
+          throw new GraphQLError('Accès refusé à ces notifications.', { extensions: { code: 'FORBIDDEN' } });
+        }
+        return pubsub.subscribe('NOTIFICATION_ADDED', args.profileId);
+      },
       resolve: (payload: any) => payload.notificationAdded,
     },
     messageReceived: {
-      // NOTE IMPORTANTE : avant ce correctif, le filtrage par `membershipId`
-      // n'était pas appliqué — seul `schoolId` servait de canal, donc
-      // n'importe quel membre abonné recevait le contenu de TOUS les
-      // messages privés échangés dans l'établissement (sujet + contenu
-      // inclus), pas seulement ceux qui lui étaient adressés.
-      subscribe: (_: unknown, args: { schoolId: string; membershipId: string }) =>
-        filterAsyncIterator(
+      subscribe: (_: unknown, args: { schoolId: string; membershipId: string }, ctx: GraphQLContext) => {
+        const user = requireAuth(ctx);
+        requireSchoolMember(ctx, args.schoolId);
+        if (user.role !== 'SUPER_ADMIN' && args.membershipId !== user.membershipId) {
+          throw new GraphQLError('Accès refusé à cette messagerie.', { extensions: { code: 'FORBIDDEN' } });
+        }
+        return filterAsyncIterator(
           pubsub.subscribe('MESSAGE_RECEIVED', args.schoolId),
           (payload: any) => payload?.messageReceived?.receiverId === args.membershipId
-        ),
+        );
+      },
       resolve: (payload: any) => payload.messageReceived,
     },
     attendanceUpdated: {
-      subscribe: (_: unknown, args: { classSubjectId: string }) =>
-        pubsub.subscribe('ATTENDANCE_UPDATED', args.classSubjectId),
+      subscribe: async (_: unknown, args: { classSubjectId: string }, ctx: GraphQLContext) => {
+        const user = requireAuth(ctx);
+        const cs = await ctx.db.query.classSubjects.findFirst({
+          where: eq(classSubjects.id, args.classSubjectId),
+          with: { class: true },
+        });
+        if (!cs) {
+          throw new GraphQLError('Association introuvable', { extensions: { code: 'NOT_FOUND' } });
+        }
+        requireSchoolMember(ctx, (cs as any).class.schoolId);
+        if (!['ADMIN', 'SUPER_ADMIN', 'TEACHER'].includes(user.role)) {
+          throw new GraphQLError('Accès refusé.', { extensions: { code: 'FORBIDDEN' } });
+        }
+        if (user.role === 'TEACHER' && cs.teacherMembershipId !== user.membershipId) {
+          throw new GraphQLError('Accès refusé à cette classe.', { extensions: { code: 'FORBIDDEN' } });
+        }
+        return pubsub.subscribe('ATTENDANCE_UPDATED', args.classSubjectId);
+      },
       resolve: (payload: any) => payload.attendanceUpdated,
     },
     bulletinStatusChanged: {
-      subscribe: (_: unknown, args: { studentId: string }) =>
-        pubsub.subscribe('BULLETIN_STATUS', args.studentId),
+      subscribe: async (_: unknown, args: { studentId: string }, ctx: GraphQLContext) => {
+        requireAuth(ctx);
+        const student = await ctx.db.query.students.findFirst({
+          where: (t, { eq: e }) => e(t.id, args.studentId),
+          with: { class: true },
+        });
+        if (!student) {
+          throw new GraphQLError('Élève introuvable', { extensions: { code: 'NOT_FOUND' } });
+        }
+        await requireStudentAccess(ctx, args.studentId, (student as any).class.schoolId);
+        return pubsub.subscribe('BULLETIN_STATUS', args.studentId);
+      },
       resolve: (payload: any) => payload.bulletinStatusChanged,
     },
     paymentStatusChanged: {
-      subscribe: (_: unknown, args: { studentId: string }) =>
-        pubsub.subscribe('PAYMENT_STATUS', args.studentId),
+      subscribe: async (_: unknown, args: { studentId: string }, ctx: GraphQLContext) => {
+        requireAuth(ctx);
+        const student = await ctx.db.query.students.findFirst({
+          where: (t, { eq: e }) => e(t.id, args.studentId),
+          with: { class: true },
+        });
+        if (!student) {
+          throw new GraphQLError('Élève introuvable', { extensions: { code: 'NOT_FOUND' } });
+        }
+        await requireStudentAccess(ctx, args.studentId, (student as any).class.schoolId);
+        return pubsub.subscribe('PAYMENT_STATUS', args.studentId);
+      },
       resolve: (payload: any) => payload.paymentStatusChanged,
     },
     remotePaymentStatusChanged: {
-      // Canal = transactionId : seul le parent/élève qui a initié le paiement
-      // (et qui connaît la référence de sa transaction) suit son dénouement.
-      subscribe: (_: unknown, args: { transactionId: string }) =>
-        pubsub.subscribe('REMOTE_PAYMENT_STATUS', args.transactionId),
+      subscribe: async (_: unknown, args: { transactionId: string }, ctx: GraphQLContext) => {
+        requireAuth(ctx);
+        const tx = await ctx.db.query.paymentTransactions.findFirst({
+          where: eq(paymentTransactions.id, args.transactionId),
+          with: { student: { with: { class: true } } },
+        });
+        if (!tx) {
+          throw new GraphQLError('Transaction introuvable', { extensions: { code: 'NOT_FOUND' } });
+        }
+        await requireStudentAccess(ctx, tx.studentId, (tx as any).student.class.schoolId);
+        return pubsub.subscribe('REMOTE_PAYMENT_STATUS', args.transactionId);
+      },
       resolve: (payload: any) => payload.remotePaymentStatusChanged,
     },
     announcementPublished: {
-      subscribe: (_: unknown, args: { schoolId: string }) =>
-        pubsub.subscribe('ANNOUNCEMENT_PUBLISHED', args.schoolId),
+      subscribe: (_: unknown, args: { schoolId: string }, ctx: GraphQLContext) => {
+        requireSchoolMember(ctx, args.schoolId);
+        return pubsub.subscribe('ANNOUNCEMENT_PUBLISHED', args.schoolId);
+      },
       resolve: (payload: any) => payload.announcementPublished,
     },
   },

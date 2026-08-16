@@ -10,6 +10,7 @@ import {
   GRADES_BY_CLASS_QUERY,
   BULK_CREATE_GRADES_MUTATION,
   UPDATE_GRADE_MUTATION,
+  MY_SCHOOL_QUERY,
 } from '@/lib/graphql/queries';
 import { BookOpen, Save, Download, ChevronDown, Check, AlertCircle, TrendingUp } from 'lucide-react';
 
@@ -92,6 +93,7 @@ export default function TeacherGradesPage() {
 
   // ── Data fetching ─────────────────────────────────────────
   const { data: csData }      = useQuery(CLASS_SUBJECTS_BY_TEACHER_QUERY, { variables: { schoolId }, skip: !schoolId });
+  const { data: mySchoolData } = useQuery(MY_SCHOOL_QUERY, { variables: { schoolId }, skip: !schoolId });
   const { data: studentData } = useQuery(STUDENTS_BY_CLASS_QUERY, { variables: { classId }, skip: !classId });
   const students: any[] = studentData?.studentsByClass?.data ?? [];
   const { data: gradeData, refetch } = useQuery(GRADES_BY_CLASS_QUERY, {
@@ -248,7 +250,7 @@ export default function TeacherGradesPage() {
       const token = tokenStorage.get() ?? '';
       const cls2 = myClasses.find((c: any) => c.id === classId);
       const className = cls2?.nom ?? 'Classe';
-      const params = new URLSearchParams({ classId, trimestre, className, schoolName: schoolId });
+      const params = new URLSearchParams({ classId, trimestre, className, school: mySchoolData?.mySchool?.nom ?? 'École' });
       const res = await fetch(`${API_BASE}/export/grades?${params}`, {
         headers: { Authorization: `Bearer ${token}` },
       });

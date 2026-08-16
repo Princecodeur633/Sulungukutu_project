@@ -437,14 +437,20 @@ export const schoolResolvers = {
 
     exportData: async (
       _: unknown,
-      args: { input: { type: string; classId?: string; trimestre?: string; anneeScolaire?: string } },
+      args: { input: { type: string; schoolId: string; classId?: string; trimestre?: string; anneeScolaire?: string } },
       ctx: GraphQLContext
     ) => {
-      requireAdmin(ctx);
+      requireSchoolAdmin(ctx, args.input.schoolId);
+      const params = new URLSearchParams();
+      if (args.input.classId) params.set('classId', args.input.classId);
+      if (args.input.trimestre) params.set('trimestre', args.input.trimestre);
+      if (args.input.anneeScolaire) params.set('anneeScolaire', args.input.anneeScolaire);
+      const qs = params.toString();
       return {
-        url:      `/export/${args.input.type.toLowerCase()}?classId=${args.input.classId ?? ''}`,
-        filename: `export_${args.input.type}_${Date.now()}.xlsx`,
-        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        url:       `/export/${args.input.type.toLowerCase()}${qs ? `?${qs}` : ''}`,
+        filename:  `export_${args.input.type}_${Date.now()}.xlsx`,
+        mimeType:  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        expiresAt: new Date(Date.now() + 15 * 60 * 1000),
       };
     },
   },

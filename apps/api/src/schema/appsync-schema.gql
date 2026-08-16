@@ -571,6 +571,7 @@ type AuthPayload {
 
 type SwitchWorkspacePayload {
   accessToken: String!
+  refreshToken: String
   membership: SchoolMembership!
 }
 
@@ -1269,6 +1270,7 @@ type Mutation {
   # (uniquement l'email interne généré automatiquement), aucun email ne
   # part réellement — seul un admin peut alors utiliser adminResetPassword.
   requestPasswordReset(identifiant: String!): Boolean!
+  confirmPasswordReset(token: String!, newPassword: String!): Boolean!
 
   # Réinitialisation en présentiel par un admin d'école — seul canal fiable
   # pour les utilisateurs sans email personnel (fréquent chez les parents

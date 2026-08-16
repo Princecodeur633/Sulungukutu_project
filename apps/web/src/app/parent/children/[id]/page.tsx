@@ -2,7 +2,7 @@
 import { BulletinDownloadButton } from '@/components/ui/BulletinDownloadButton';
 import { PayMonthModal } from '@/components/ui/PayMonthModal';
 
-import { BULLETINS_BY_STUDENT_QUERY, CHILD_SUMMARY_QUERY, MY_SCHOOL_QUERY, BULLETIN_STATUS_CHANGED_SUBSCRIPTION } from '@/lib/graphql/queries';
+import { BULLETINS_BY_STUDENT_QUERY, CHILD_SUMMARY_QUERY, MY_SCHOOL_QUERY, BULLETIN_STATUS_CHANGED_SUBSCRIPTION, PAYMENTS_BY_STUDENT_QUERY } from '@/lib/graphql/queries';
 import { tokenStorage } from '@/lib/apollo/client';
 import { useParams } from 'next/navigation';
 import { useState, useMemo } from 'react';
@@ -44,9 +44,12 @@ export default function ChildDetailPage() {
   const [tab, setTab]         = useState<typeof TABS[number]>('Résumé');
   const [trimFilter, setTrim] = useState<string>('T1');
   const [bulletinView, setBulletinView] = useState<'cards'|'compare'>('cards');
+  const [payingMonth, setPayingMonth] = useState<number | null>(null);
 
   const { data, loading, refetch: refetchSummary } = useQuery(CHILD_SUMMARY_QUERY, { variables: { studentId }, skip: !studentId });
-  const [payingMonth, setPayingMonth] = useState<number | null>(null);
+  const { data: paymentsData, refetch: refetchPayments } = useQuery(PAYMENTS_BY_STUDENT_QUERY, {
+    variables: { studentId, anneeScolaire: annee }, skip: !studentId,
+  });
   const { data: bulletinData, refetch: refetchBulletins } = useQuery(BULLETINS_BY_STUDENT_QUERY, {
     variables: { studentId, anneeScolaire: annee }, skip: !studentId,
   });
@@ -299,7 +302,7 @@ export default function ChildDetailPage() {
                     {/* Barre de progression */}
                     <div className="h-2 bg-[var(--bg-subtle)] rounded-full overflow-hidden mb-3">
                       <div className={`h-full rounded-full transition-all
-                        ${moy >= 14 ? 'bg-[var(--ok-bg)]0' : moy >= 10 ? 'bg-[var(--warn-bg)]0' : 'bg-[var(--err-bg)]0'}`}
+                        ${moy >= 14 ? 'bg-[var(--ok)]' : moy >= 10 ? 'bg-[var(--warn)]' : 'bg-[var(--err)]'}`}
                         style={{ width: `${(moy/20)*100}%` }} />
                     </div>
                     {/* Détail des notes */}
@@ -506,13 +509,14 @@ export default function ChildDetailPage() {
           <h3 className="section-title"><CreditCard size={16} className="text-[var(--warn)]" /> Paiements {annee}</h3>
           <div className="grid grid-cols-3 md:grid-cols-9 gap-2.5">
             {[1,2,3,4,5,6,7,8,9].map((mois) => {
-              const p    = summary.unpaidMonths?.find((x: any) => x.mois === mois);
-              const paid = !p;
+              const p    = (paymentsData?.paymentsByStudent?.moisDetails ?? []).find((x: any) => x.mois === mois);
+              const paid = p?.statut === 'PAYE' || p?.statut === 'EXONERE';
+              const partiel = p?.statut === 'PARTIEL';
               const restant = p ? Math.max(0, (p.montantDu ?? 0) - (p.montantPaye ?? 0)) : 0;
               return (
                 <div key={mois}
                   className={`text-center p-3.5 rounded-xl border
-                    ${paid ? 'bg-[var(--ok-bg)] border-[var(--bd)]' : 'bg-[var(--err-bg)] border-red-200'}`}>
+                    ${paid ? 'bg-[var(--ok-bg)] border-[var(--bd)]' : partiel ? 'bg-[var(--warn-bg)] border-amber-200' : 'bg-[var(--err-bg)] border-red-200'}`}>
                   <p className="text-xs font-bold text-[var(--tx-secondary)]">{MOIS_LABELS[mois]}</p>
                   <div className="mt-2">
                     {paid
@@ -559,11 +563,11 @@ export default function ChildDetailPage() {
         mois={payingMonth ?? 0}
         anneeScolaire={annee}
         montantDu={(() => {
-          const p = summary?.unpaidMonths?.find((x: any) => x.mois === payingMonth);
-          return p ? Math.max(0, (p.montantDu ?? 0) - (p.montantPaye ?? 0)) : 0;
+          const p = (paymentsData?.paymentsByStudent?.moisDetails ?? []).find((x: any) => x.mois === payingMonth);
+          return p ? Math.max(0, Number(p.montantDu ?? 0) - Number(p.montantPaye ?? 0)) : 0;
         })()}
         onClose={() => setPayingMonth(null)}
-        onSuccess={() => refetchSummary()}
+        onSuccess={() => { refetchSummary(); refetchPayments(); }}
       />
     </div>
   );

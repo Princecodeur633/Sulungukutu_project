@@ -26,17 +26,41 @@ export interface GraphQLContext {
  * du membership), sinon les abonnements pourraient rester ouverts pour
  * un compte désactivé alors que les requêtes HTTP le refusent déjà.
  */
-async function resolveCurrentUser(token: string | null | undefined): Promise<JWTPayload | null> {
+export async function resolveCurrentUser(token: string | null | undefined): Promise<JWTPayload | null> {
   if (!token) return null;
   try {
-    let currentUser = verifyAccessToken(token);
+    const currentUser = verifyAccessToken(token);
+
+    const [profile] = await db
+      .select({
+        id: globalProfiles.id,
+        isSuperAdmin: globalProfiles.isSuperAdmin,
+        passwordChangedAt: globalProfiles.passwordChangedAt,
+      })
+      .from(globalProfiles)
+      .where(eq(globalProfiles.id, currentUser.profileId))
+      .limit(1);
+
+    if (!profile) return null;
+
+    // Invalide les JWT émis avant un changement / reset de mot de passe.
+    if (profile.passwordChangedAt && currentUser.iat) {
+      const changedMs = profile.passwordChangedAt.getTime();
+      if (currentUser.iat * 1000 < changedMs - 2000) {
+        return null;
+      }
+    }
+
+    if (profile.isSuperAdmin) {
+      return { ...currentUser, role: 'SUPER_ADMIN' };
+    }
 
     // Le JWT ne fait que prouver qu'un token valide a été émis un jour ;
     // il ne reflète pas un éventuel changement de statut depuis (compte
     // désactivé/suspendu par un admin). On revérifie donc l'état réel du
     // membership à chaque requête, pour que la désactivation prenne effet
     // immédiatement plutôt qu'à l'expiration naturelle du token (jusqu'à 7j).
-    if (currentUser?.membershipId) {
+    if (currentUser.membershipId) {
       const [membership] = await db
         .select({ status: schoolMemberships.status })
         .from(schoolMemberships)
@@ -49,7 +73,6 @@ async function resolveCurrentUser(token: string | null | undefined): Promise<JWT
     }
     return currentUser;
   } catch {
-    // Token invalide ou expiré
     return null;
   }
 }

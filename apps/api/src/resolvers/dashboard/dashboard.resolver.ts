@@ -1,4 +1,4 @@
-import { eq, and, count, sql, gte, lte, inArray } from 'drizzle-orm';
+import { eq, and, count, sql, gte, lte, inArray, isNull } from 'drizzle-orm';
 import {
   students, schoolMemberships, classes, attendances,
   payments, parentStudents, classSubjects, schedules, grades, bulletins,
@@ -7,6 +7,7 @@ import {
 import { requireSchoolMember, requireStudentAccess } from '../../middleware/permissions';
 import { paymentService } from '../../services/payment.service';
 import type { GraphQLContext } from '../../middleware/auth';
+import { currentMoisScolaire, currentJourEmploi } from '../../utils/school-year';
 import type {
   StudentData, ClassSubjectData, ScheduleData, GradeData,
   AttendanceData, ParentStudentData, PaymentData,
@@ -41,23 +42,48 @@ export const dashboardResolvers = {
         ctx.db.select({ count: count() }).from(classes).where(
           eq(classes.schoolId, args.schoolId)
         ),
-        ctx.db.select({ count: count() }).from(attendances).where(
-          and(eq(attendances.date, today), eq(attendances.statut, 'PRESENT'))
-        ),
-        ctx.db.select({ count: count() }).from(attendances).where(
-          and(eq(attendances.date, today), eq(attendances.statut, 'ABSENT'))
-        ),
+        ctx.db.select({ count: count() }).from(attendances)
+          .innerJoin(students, eq(attendances.studentId, students.id))
+          .innerJoin(classes, eq(students.classId, classes.id))
+          .where(and(
+            eq(attendances.date, today),
+            eq(attendances.statut, 'PRESENT'),
+            eq(classes.schoolId, args.schoolId),
+            isNull(attendances.deletedAt),
+          )),
+        ctx.db.select({ count: count() }).from(attendances)
+          .innerJoin(students, eq(attendances.studentId, students.id))
+          .innerJoin(classes, eq(students.classId, classes.id))
+          .where(and(
+            eq(attendances.date, today),
+            eq(attendances.statut, 'ABSENT'),
+            eq(classes.schoolId, args.schoolId),
+            isNull(attendances.deletedAt),
+          )),
       ]);
 
       // Élèves impayés ce mois
-      const currentMonth = new Date().getMonth() + 1;
-      const [unpaidCount] = await ctx.db
-        .select({ count: count() })
-        .from(payments)
-        .where(and(
-          eq(payments.mois,   currentMonth),
-          eq(payments.statut, 'IMPAYE'),
-        ));
+      const currentMonth = currentMoisScolaire();
+      const schoolClassIds = await ctx.db.query.classes.findMany({
+        where: eq(classes.schoolId, args.schoolId),
+        columns: { id: true },
+      });
+      const schoolStudentIds = schoolClassIds.length > 0
+        ? await ctx.db.query.students.findMany({
+            where: inArray(students.classId, schoolClassIds.map((c) => c.id)),
+            columns: { id: true },
+          })
+        : [];
+      const [unpaidCount] = schoolStudentIds.length > 0
+        ? await ctx.db
+            .select({ count: count() })
+            .from(payments)
+            .where(and(
+              eq(payments.mois, currentMonth),
+              inArray(payments.statut, ['IMPAYE', 'PARTIEL']),
+              inArray(payments.studentId, schoolStudentIds.map((s) => s.id)),
+            ))
+        : [{ count: 0 }];
 
       // Performances par classe
       const allClasses = await ctx.db.query.classes.findMany({
@@ -136,7 +162,7 @@ export const dashboardResolvers = {
     // ── Teacher Dashboard ──────────────────────────────────────
     teacherDashboard: async (_: unknown, args: { schoolId: string }, ctx: GraphQLContext) => {
       const user = requireSchoolMember(ctx, args.schoolId);
-      const today = new Date().getDay(); // 0=Dim, 1=Lun...
+      const today = currentJourEmploi();
 
       const myClassSubjects = await ctx.db.query.classSubjects.findMany({
         where: eq(classSubjects.teacherMembershipId, user.membershipId!),
@@ -173,7 +199,7 @@ export const dashboardResolvers = {
       // Absences de la semaine (lun–ven)
       const JOUR_LABELS = ['', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
       let weeklyAbsences: Array<{ jour: string; absences: number; presents: number; total: number }> = [];
-      let studentsAtRisk: Array<{ id: string; nom: string; prenom: string; absences: number; moyenne: number | null }> = [];
+      let studentsAtRisk: Array<{ student: unknown; moyenne: number; absenceCount: number }> = [];
       let totalStudents = 0;
 
       if (myClassIds.length > 0) {
@@ -235,13 +261,10 @@ export const dashboardResolvers = {
           ).length;
 
           if ((moy !== null && moy < 10) || absCount >= 3) {
-            const profile = (student as StudentData).membership?.profile;
             studentsAtRisk.push({
-              id:       student.id,
-              nom:      profile?.nom ?? '',
-              prenom:   profile?.prenom ?? '',
-              absences: absCount,
-              moyenne:  moy,
+              student,
+              moyenne: moy ?? 0,
+              absenceCount: absCount,
             });
           }
         }
@@ -305,9 +328,9 @@ export const dashboardResolvers = {
           const presenceRate = totalAttendances > 0 ? presents / totalAttendances : null;
 
           // Mois courant
-          const currentMonth   = new Date().getMonth() + 1;
+          const currentMonth   = currentMoisScolaire();
           const currentPayment = paymentSummary.moisDetails.find((p) => p.mois === currentMonth) ?? null;
-          const unpaidMonths   = paymentSummary.moisDetails.filter((p) => p.statut === 'IMPAYE');
+          const unpaidMonths   = paymentSummary.moisDetails.filter((p) => p.statut === 'IMPAYE' || p.statut === 'PARTIEL');
 
           // Dernières notes
           const recentGrades = (student.grades ?? [])
@@ -469,14 +492,15 @@ export const dashboardResolvers = {
         ? await ctx.db.query.schools.findFirst({ where: eq(schools.id, schoolIdForStudent) })
         : null;
       const paymentSummary = await paymentService.getPaymentSummary(ctx.db, student.id, studentSchool?.anneeScolaire ?? '2024-2025');
-      const currentMonth = new Date().getMonth() + 1;
+      const currentMonth = currentMoisScolaire();
+      const unpaidMonths = paymentSummary.moisDetails.filter((p) => p.statut === 'IMPAYE' || p.statut === 'PARTIEL');
 
       return {
         student,
         moyenneGenerale:     moy,
         presenceRate:        total > 0 ? pres / total : null,
         currentMonthPayment: paymentSummary.moisDetails.find((p) => p.mois === currentMonth) ?? null,
-        unpaidMonths:        paymentSummary.moisDetails.filter((p) => p.statut === 'IMPAYE'),
+        unpaidMonths,
         recentGrades:        allGrades.filter((g: any) => g.classSubject != null).slice(0, 5),
         recentAbsences:      (allAttendances as AttendanceData[]).filter(a => a.statut === "ABSENT").slice(0, 5),
         allGrades,

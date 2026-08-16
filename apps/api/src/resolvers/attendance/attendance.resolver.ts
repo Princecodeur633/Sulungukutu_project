@@ -1,4 +1,4 @@
-import { eq, and } from 'drizzle-orm';
+import { eq, and, count } from 'drizzle-orm';
 import { attendances, classSubjects, notifications, parentStudents, students, schools } from '../../db/schema';
 import { requireAdminOrTeacher, requireSchoolMember } from '../../middleware/permissions';
 import { MarkAttendanceSchema } from '../../utils/validators/schemas';
@@ -83,25 +83,29 @@ export const attendanceResolvers = {
 
       const where = and(...conditions);
 
-      const data = await ctx.db.query.attendances.findMany({
-        where,
-        limit,
-        offset,
-        orderBy: (a, { desc }) => [desc(a.date)],
-        with: {
-          classSubject: { with: { subject: true } },
-          markedBy: { with: { profile: true } },
-        },
-      });
+      const [data, total] = await Promise.all([
+        ctx.db.query.attendances.findMany({
+          where,
+          limit,
+          offset,
+          orderBy: (a, { desc }) => [desc(a.date)],
+          with: {
+            classSubject: { with: { subject: true } },
+            markedBy: { with: { profile: true } },
+          },
+        }),
+        ctx.db.select({ count: count() }).from(attendances).where(where),
+      ]);
 
+      const totalCount = Number(total[0]?.count ?? 0);
       return {
         data,
         pageInfo: {
-          hasNextPage:     data.length === limit,
+          hasNextPage:     offset + limit < totalCount,
           hasPreviousPage: page > 1,
-          totalCount:      data.length,
+          totalCount,
           currentPage:     page,
-          totalPages:      Math.ceil(data.length / limit),
+          totalPages:      Math.max(1, Math.ceil(totalCount / limit)),
         },
       };
     },

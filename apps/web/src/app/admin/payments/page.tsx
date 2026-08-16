@@ -40,9 +40,9 @@ function PaymentStatusBadge({ statut }: { statut: string }) {
 }
 
 function PaymentRow({
-  student, anneeScolaire, onUpdate,
+  student, anneeScolaire, onUpdate, filterStatus,
 }: {
-  student: any; anneeScolaire: string; onUpdate: () => void;
+  student: any; anneeScolaire: string; onUpdate: () => void; filterStatus: string;
 }) {
   const profile = student.membership?.profile;
   const studentName = `${profile?.prenom ?? ''} ${profile?.nom ?? ''}`.trim();
@@ -58,6 +58,10 @@ function PaymentRow({
 
   const summary = data?.paymentsByStudent;
   const payments = summary?.moisDetails ?? [];
+
+  if (filterStatus && payments.length > 0 && !payments.some((p: any) => p.statut === filterStatus)) {
+    return null;
+  }
 
   const refreshAll = () => { refetchPayments(); onUpdate(); };
 
@@ -254,7 +258,7 @@ export default function AdminPaymentsPage() {
     pollInterval: 30_000,
   });
   const { data: studentData, refetch } = useQuery(STUDENTS_BY_CLASS_QUERY, {
-    variables: { classId, pagination: { page: 1, limit: 50 } },
+    variables: { classId, pagination: { page: 1, limit: 200 } },
     skip: !classId,
   });
 
@@ -263,7 +267,8 @@ export default function AdminPaymentsPage() {
 
   const filtered = students.filter((s: any) => {
     const name = `${s.membership?.profile?.prenom} ${s.membership?.profile?.nom}`.toLowerCase();
-    return !search || name.includes(search.toLowerCase()) || s.matricule.includes(search);
+    const matchSearch = !search || name.includes(search.toLowerCase()) || s.matricule.includes(search);
+    return matchSearch;
   });
 
   return (
@@ -312,6 +317,20 @@ export default function AdminPaymentsPage() {
           />
         </div>
 
+        <div className="relative">
+          <Filter size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--tx-muted)]" />
+          <select
+            className="input pl-8 py-1.5 text-sm w-44"
+            value={filterStatus}
+            onChange={(e) => setFilter(e.target.value)}
+          >
+            <option value="">Tous les statuts</option>
+            {Object.entries(STATUS_CONFIG).map(([k, v]) => (
+              <option key={k} value={k}>{v.label}</option>
+            ))}
+          </select>
+        </div>
+
         {/* Légende */}
         <div className="flex items-center gap-3 ml-auto">
           {Object.entries(STATUS_CONFIG).map(([k, v]) => (
@@ -358,6 +377,7 @@ export default function AdminPaymentsPage() {
                       student={s}
                       anneeScolaire={anneeScolaire}
                       onUpdate={refetch}
+                      filterStatus={filterStatus}
                     />
                   ))
                 )}

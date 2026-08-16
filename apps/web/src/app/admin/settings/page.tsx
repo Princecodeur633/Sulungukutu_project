@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, gql } from '@apollo/client';
 import { tokenStorage } from '@/lib/apollo/client';
 import { SchoolColorPicker } from '@/components/ui/SchoolColorPicker';
@@ -8,7 +8,7 @@ import { School, Palette, Save, Building2 } from 'lucide-react';
 
 const SCHOOL_SETTINGS_QUERY = gql`
   query SchoolSettings($id: ID!) {
-    schoolById(id: $id) {
+    mySchool(schoolId: $id) {
       id nom code adresse telephone logoUrl anneeScolaire accentColor
     }
   }
@@ -26,15 +26,17 @@ export default function AdminSettings() {
   const schoolId   = tokenStorage.getSchoolId() ?? '';
   const { addToast } = useToast();
   const { data, refetch } = useQuery(SCHOOL_SETTINGS_QUERY, { variables: { id: schoolId }, skip: !schoolId });
-  const school = data?.schoolById;
+  const school = data?.mySchool;
 
   const [form, setForm] = useState({ nom: '', adresse: '', telephone: '', anneeScolaire: '' });
   const [initialized, setInit] = useState(false);
 
-  if (school && !initialized) {
-    setForm({ nom: school.nom, adresse: school.adresse ?? '', telephone: school.telephone ?? '', anneeScolaire: school.anneeScolaire });
-    setInit(true);
-  }
+  useEffect(() => {
+    if (school && !initialized) {
+      setForm({ nom: school.nom, adresse: school.adresse ?? '', telephone: school.telephone ?? '', anneeScolaire: school.anneeScolaire });
+      setInit(true);
+    }
+  }, [school, initialized]);
 
   const [updateSchool, { loading }] = useMutation(UPDATE_SCHOOL_MUTATION);
 

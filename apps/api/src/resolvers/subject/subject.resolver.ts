@@ -209,6 +209,8 @@ export const subjectResolvers = {
             teacherMembershipId: input.teacherMembershipId,
             coefficient:         String(input.coefficient),
             hoursPerWeek:        input.hoursPerWeek,
+            isActive:            true,
+            deletedAt:           null,
           })
           .where(eq(classSubjects.id, existing.id))
           .returning();

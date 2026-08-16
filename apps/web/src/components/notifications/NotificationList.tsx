@@ -96,6 +96,7 @@ export function NotificationList({ role }: Props) {
   };
 
   const handleDelete = async (id: string) => {
+    if (!window.confirm('Supprimer cette notification ?')) return;
     await deleteNotif({ variables: { id } });
     refetch();
   };

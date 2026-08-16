@@ -1,9 +1,10 @@
 import cron from 'node-cron';
+import { and, count, eq, sql } from 'drizzle-orm';
 import { db } from '../db';
 import { schools, schoolMemberships, globalProfiles, students, bulletins, classes } from '../db/schema';
 import { paymentService } from '../services/payment.service';
 import { emailService } from '../services/email.service';
-import { eq, and, count, sql } from 'drizzle-orm';
+import { getMoisScolaire } from '../utils/school-year';
 
 /**
  * Initialise tous les cron jobs du système
@@ -112,16 +113,4 @@ async function runBulletinReminders(): Promise<void> {
   } catch (error) {
     console.error('[CRON] Erreur rappel bulletins:', error);
   }
-}
-
-/**
- * Convertit le mois calendaire en mois scolaire (Sept=1 ... Mai=9)
- */
-function getMoisScolaire(moisCalendaire: number): number {
-  // Sept=1, Oct=2, Nov=3, Déc=4, Jan=5, Fév=6, Mar=7, Avr=8, Mai=9
-  const map: Record<number, number> = {
-    9: 1, 10: 2, 11: 3, 12: 4,
-    1: 5,  2: 6,  3: 7,  4: 8,  5: 9,
-  };
-  return map[moisCalendaire] ?? 0;
 }

@@ -15,7 +15,7 @@ const JOURS = ['', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
 
 function NoteBar({ valeur }: { valeur: number }) {
   const pct = (valeur / 20) * 100;
-  const color = valeur >= 14 ? 'bg-[var(--ok-bg)]0' : valeur >= 10 ? 'bg-[var(--warn-bg)]0' : 'bg-[var(--err-bg)]0';
+  const color = valeur >= 14 ? 'bg-[var(--ok)]' : valeur >= 10 ? 'bg-[var(--warn)]' : 'bg-[var(--err)]';
   return (
     <div className="flex items-center gap-2 w-full">
       <div className="flex-1 h-1.5 bg-[var(--bg-subtle)] rounded-full overflow-hidden">

@@ -1,17 +1,18 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useState, Suspense } from 'react';
 import { useMutation } from '@apollo/client';
-import { LOGIN_MUTATION, CHANGE_PASSWORD_MUTATION } from '@/lib/graphql/queries';
+import { CONFIRM_PASSWORD_RESET_MUTATION, LOGIN_MUTATION, CHANGE_PASSWORD_MUTATION } from '@/lib/graphql/queries';
 import { tokenStorage } from '@/lib/apollo/client';
 import Image from 'next/image';
 import { Lock, Mail, Eye, EyeOff, CheckCircle, ArrowLeft, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import logoImg from '@/img/logo.png';
 import { chartColors } from '@/lib/chartColors';
 
-export default function ResetPasswordPage() {
-  const router = useRouter();
+function ResetPasswordInner() {
+  const searchParams = useSearchParams();
+  const resetToken   = searchParams.get('token') ?? '';
 
   const [step, setStep]             = useState<'form' | 'done'>('form');
   const [email, setEmail]           = useState('');
@@ -22,6 +23,7 @@ export default function ResetPasswordPage() {
   const [showTemp, setShowTemp]     = useState(false);
   const [showNew, setShowNew]       = useState(false);
 
+  const [confirmReset]   = useMutation(CONFIRM_PASSWORD_RESET_MUTATION);
   const [login]          = useMutation(LOGIN_MUTATION);
   const [changePassword] = useMutation(CHANGE_PASSWORD_MUTATION);
 
@@ -42,31 +44,27 @@ export default function ResetPasswordPage() {
     e.preventDefault();
     setError('');
 
-    if (!email.trim())   { setError('Veuillez saisir votre adresse email.'); return; }
-    if (!tempPwd.trim()) { setError('Veuillez saisir votre mot de passe temporaire.'); return; }
     if (newPwd.length < 8) { setError('Le nouveau mot de passe doit comporter au moins 8 caractères.'); return; }
     if (newPwd !== confirmPwd) { setError('Les mots de passe ne correspondent pas.'); return; }
-    if (newPwd === tempPwd) { setError('Le nouveau mot de passe doit être différent du mot de passe temporaire.'); return; }
 
     try {
-      // Step 1 : se connecter avec le mot de passe temporaire
-      const { data: loginData } = await login({
-        variables: { input: { identifiant: email.trim(), password: tempPwd } },
-      });
+      if (resetToken) {
+        await confirmReset({ variables: { token: resetToken, newPassword: newPwd } });
+      } else {
+        if (!email.trim())   { setError('Veuillez saisir votre adresse email ou identifiant.'); return; }
+        if (!tempPwd.trim()) { setError('Veuillez saisir votre mot de passe temporaire.'); return; }
+        if (newPwd === tempPwd) { setError('Le nouveau mot de passe doit être différent du mot de passe temporaire.'); return; }
 
-      if (!loginData?.login?.accessToken) throw new Error('Connexion échouée.');
-
-      // Stocker le token temporairement pour autoriser changePassword
-      tokenStorage.set(loginData.login.accessToken);
-
-      // Step 2 : changer le mot de passe
-      await changePassword({
-        variables: { input: { oldPassword: tempPwd, newPassword: newPwd } },
-      });
-
-      // Vider le token — l'utilisateur doit se reconnecter proprement
-      tokenStorage.clear();
-
+        const { data: loginData } = await login({
+          variables: { input: { identifiant: email.trim(), password: tempPwd } },
+        });
+        if (!loginData?.login?.accessToken) throw new Error('Connexion échouée.');
+        tokenStorage.set(loginData.login.accessToken);
+        await changePassword({
+          variables: { input: { oldPassword: tempPwd, newPassword: newPwd } },
+        });
+        tokenStorage.clear();
+      }
       setStep('done');
     } catch (err: any) {
       const msg = err?.graphQLErrors?.[0]?.message ?? err?.message ?? 'Une erreur est survenue.';
@@ -78,6 +76,10 @@ export default function ResetPasswordPage() {
     }
   };
 
+  const submitDisabled = resetToken
+    ? !newPwd || !confirmPwd
+    : !email || !tempPwd || !newPwd || !confirmPwd;
+
   return (
     <div style={{
       minHeight: '100dvh',
@@ -86,7 +88,6 @@ export default function ResetPasswordPage() {
     }}>
       <div style={{ width: '100%', maxWidth: 440 }}>
 
-        {/* Logo */}
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <div style={{
             display: 'inline-flex', width: 56, height: 56, borderRadius: 14,
@@ -106,7 +107,6 @@ export default function ResetPasswordPage() {
         }}>
 
           {step === 'done' ? (
-            /* ── Succès ── */
             <div style={{ padding: 36, textAlign: 'center' }}>
               <div style={{
                 width: 72, height: 72, borderRadius: '50%',
@@ -129,9 +129,7 @@ export default function ResetPasswordPage() {
               </Link>
             </div>
           ) : (
-            /* ── Formulaire ── */
             <>
-              {/* Header */}
               <div style={{
                 padding: '24px 28px 20px',
                 borderBottom: '1px solid var(--bd)',
@@ -145,60 +143,62 @@ export default function ResetPasswordPage() {
                   </h2>
                 </div>
                 <p style={{ fontSize: 12, color: 'var(--tx-muted)', lineHeight: 1.5 }}>
-                  Vous avez reçu un mot de passe temporaire par email. Saisissez-le ci-dessous puis choisissez un nouveau mot de passe.
+                  {resetToken
+                    ? 'Choisissez un nouveau mot de passe pour finaliser la réinitialisation.'
+                    : 'Vous avez reçu un mot de passe temporaire (remise par l’administration). Saisissez-le ci-dessous puis choisissez un nouveau mot de passe.'}
                 </p>
               </div>
 
               <form onSubmit={handleSubmit} style={{ padding: '24px 28px 28px', display: 'flex', flexDirection: 'column', gap: 18 }}>
 
-                {/* Identifiant */}
-                <div>
-                  <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--tx-secondary)', display: 'block', marginBottom: 6 }}>
-                    Email, identifiant ou téléphone
-                  </label>
-                  <div style={{ position: 'relative' }}>
-                    <Mail size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--tx-muted)' }} />
-                    <input
-                      type="text"
-                      name="identifiant"
-                      className="input"
-                      style={{ paddingLeft: 36 }}
-                      placeholder="votre@email.com, STU-A1B2 ou 06 XXX XX XX"
-                      value={email}
-                      onChange={e => setEmail(e.target.value)}
-                      autoFocus
-                      autoComplete="username"
-                    />
-                  </div>
-                </div>
+                {!resetToken && (
+                  <>
+                    <div>
+                      <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--tx-secondary)', display: 'block', marginBottom: 6 }}>
+                        Email, identifiant ou téléphone
+                      </label>
+                      <div style={{ position: 'relative' }}>
+                        <Mail size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--tx-muted)' }} />
+                        <input
+                          type="text"
+                          name="identifiant"
+                          className="input"
+                          style={{ paddingLeft: 36 }}
+                          placeholder="votre@email.com, STU-A1B2 ou 06 XXX XX XX"
+                          value={email}
+                          onChange={e => setEmail(e.target.value)}
+                          autoFocus
+                          autoComplete="username"
+                        />
+                      </div>
+                    </div>
 
-                {/* Mot de passe temporaire */}
-                <div>
-                  <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--tx-secondary)', display: 'block', marginBottom: 6 }}>
-                    Mot de passe temporaire <span style={{ color: 'var(--tx-muted)', fontWeight: 400 }}>(reçu par email ou remis par l'administration)</span>
-                  </label>
-                  <div style={{ position: 'relative' }}>
-                    <Lock size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--tx-muted)' }} />
-                    <input
-                      type={showTemp ? 'text' : 'password'}
-                      className="input"
-                      style={{ paddingLeft: 36, paddingRight: 40 }}
-                      placeholder="••••••••"
-                      value={tempPwd}
-                      onChange={e => setTempPwd(e.target.value)}
-                      autoComplete="current-password"
-                    />
-                    <button type="button" onClick={() => setShowTemp(v => !v)}
-                      style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--tx-muted)', padding: 4 }}>
-                      {showTemp ? <EyeOff size={15} /> : <Eye size={15} />}
-                    </button>
-                  </div>
-                </div>
+                    <div>
+                      <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--tx-secondary)', display: 'block', marginBottom: 6 }}>
+                        Mot de passe temporaire <span style={{ color: 'var(--tx-muted)', fontWeight: 400 }}>(reçu par email ou remis par l'administration)</span>
+                      </label>
+                      <div style={{ position: 'relative' }}>
+                        <Lock size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--tx-muted)' }} />
+                        <input
+                          type={showTemp ? 'text' : 'password'}
+                          className="input"
+                          style={{ paddingLeft: 36, paddingRight: 40 }}
+                          placeholder="••••••••"
+                          value={tempPwd}
+                          onChange={e => setTempPwd(e.target.value)}
+                          autoComplete="current-password"
+                        />
+                        <button type="button" onClick={() => setShowTemp(v => !v)}
+                          style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--tx-muted)', padding: 4 }}>
+                          {showTemp ? <EyeOff size={15} /> : <Eye size={15} />}
+                        </button>
+                      </div>
+                    </div>
 
-                {/* Séparateur */}
-                <div style={{ borderTop: '1px dashed var(--bd)', margin: '0 -4px' }} />
+                    <div style={{ borderTop: '1px dashed var(--bd)', margin: '0 -4px' }} />
+                  </>
+                )}
 
-                {/* Nouveau mot de passe */}
                 <div>
                   <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--tx-secondary)', display: 'block', marginBottom: 6 }}>
                     Nouveau mot de passe
@@ -213,13 +213,13 @@ export default function ResetPasswordPage() {
                       value={newPwd}
                       onChange={e => setNewPwd(e.target.value)}
                       autoComplete="new-password"
+                      autoFocus={!!resetToken}
                     />
                     <button type="button" onClick={() => setShowNew(v => !v)}
                       style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--tx-muted)', padding: 4 }}>
                       {showNew ? <EyeOff size={15} /> : <Eye size={15} />}
                     </button>
                   </div>
-                  {/* Barre de force */}
                   {newPwd.length > 0 && (
                     <div style={{ marginTop: 8 }}>
                       <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
@@ -236,7 +236,6 @@ export default function ResetPasswordPage() {
                   )}
                 </div>
 
-                {/* Confirmer */}
                 <div>
                   <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--tx-secondary)', display: 'block', marginBottom: 6 }}>
                     Confirmer le nouveau mot de passe
@@ -261,7 +260,6 @@ export default function ResetPasswordPage() {
                   )}
                 </div>
 
-                {/* Erreur */}
                 {error && (
                   <div style={{
                     background: 'var(--err-bg)', border: '1px solid rgba(220,38,38,.2)',
@@ -272,17 +270,15 @@ export default function ResetPasswordPage() {
                   </div>
                 )}
 
-                {/* Submit */}
                 <button
                   type="submit"
                   className="btn-primary"
                   style={{ width: '100%', justifyContent: 'center', padding: '12px 0', fontSize: 14 }}
-                  disabled={!email || !tempPwd || !newPwd || !confirmPwd}
+                  disabled={submitDisabled}
                 >
                   Enregistrer mon mot de passe
                 </button>
 
-                {/* Back */}
                 <div style={{ textAlign: 'center' }}>
                   <Link href="/auth/login" style={{
                     fontSize: 12, color: 'var(--tx-muted)',
@@ -302,3 +298,10 @@ export default function ResetPasswordPage() {
   );
 }
 
+export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={null}>
+      <ResetPasswordInner />
+    </Suspense>
+  );
+}

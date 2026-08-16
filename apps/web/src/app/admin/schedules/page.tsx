@@ -189,6 +189,7 @@ export default function AdminSchedulePage() {
   };
 
   const handleDelete = async (id: string) => {
+    if (!window.confirm('Supprimer ce créneau ?')) return;
     try { await deleteSchedule({ variables: { id } }); addToast({ type: 'success', title: 'Créneau supprimé' }); refetch(); }
     catch (err: any) { addToast({ type: 'error', title: 'Erreur', message: parseGqlError(err) }); }
   };

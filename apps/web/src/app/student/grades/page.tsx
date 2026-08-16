@@ -164,7 +164,7 @@ export default function StudentGradesPage() {
           <div className="flex-1">
             <div className="h-3 bg-[var(--bg-subtle)] rounded-full overflow-hidden mb-2">
               <div className={`h-full rounded-full transition-all
-                ${moyCurrent >= 14 ? 'bg-[var(--ok-bg)]0' : moyCurrent >= 10 ? 'bg-[var(--warn-bg)]0' : 'bg-[var(--err-bg)]0'}`}
+                ${moyCurrent >= 14 ? 'bg-[var(--ok)]' : moyCurrent >= 10 ? 'bg-[var(--warn)]' : 'bg-[var(--err)]'}`}
                 style={{ width: `${(moyCurrent / 20) * 100}%` }}
               />
             </div>
@@ -264,7 +264,7 @@ export default function StudentGradesPage() {
               <div className="h-2 bg-[var(--bg-subtle)] rounded-full overflow-hidden mb-3">
                 <div
                   className={`h-full rounded-full transition-all
-                    ${s.moyenne! >= 14 ? 'bg-[var(--ok-bg)]0' : s.moyenne! >= 10 ? 'bg-[var(--warn-bg)]0' : 'bg-[var(--err-bg)]0'}`}
+                    ${s.moyenne! >= 14 ? 'bg-[var(--ok)]' : s.moyenne! >= 10 ? 'bg-[var(--warn)]' : 'bg-[var(--err)]'}`}
                   style={{ width: `${((s.moyenne ?? 0) / 20) * 100}%` }}
                 />
               </div>

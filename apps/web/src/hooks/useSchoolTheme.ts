@@ -5,8 +5,8 @@ import { gql } from '@apollo/client';
 import { tokenStorage } from '@/lib/apollo/client';
 
 const SCHOOL_ACCENT_QUERY = gql`
-  query SchoolAccent($id: ID!) {
-    schoolById(id: $id) {
+  query SchoolAccent($schoolId: ID!) {
+    mySchool(schoolId: $schoolId) {
       id accentColor nom logoUrl
     }
   }
@@ -61,12 +61,12 @@ export function useSchoolTheme() {
 
   useEffect(() => {
     if (schoolId) {
-      loadAccent({ variables: { id: schoolId } });
+      loadAccent({ variables: { schoolId } });
     }
   }, [schoolId, loadAccent]);
 
   useEffect(() => {
-    const color = data?.schoolById?.accentColor;
+    const color = data?.mySchool?.accentColor;
     if (color) {
       applySchoolAccent(color);
       // Sauvegarder pour la prochaine session
@@ -80,5 +80,5 @@ export function useSchoolTheme() {
     if (saved) applySchoolAccent(saved);
   }, []);
 
-  return { school: data?.schoolById };
+  return { school: data?.mySchool };
 }

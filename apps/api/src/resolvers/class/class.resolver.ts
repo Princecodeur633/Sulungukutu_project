@@ -1,6 +1,6 @@
 import { GraphQLError } from 'graphql';
 import { eq, and, count, isNull } from 'drizzle-orm';
-import { classes, students, classSubjects } from '../../db/schema';
+import { classes, students, classSubjects, levels } from '../../db/schema';
 import { requireSchoolMember, requireAdminOrTeacher, requireSchoolAdmin } from '../../middleware/permissions';
 import { CreateClassSchema } from '../../utils/validators/schemas';
 import { auditService } from '../../services/audit.service';
@@ -124,6 +124,13 @@ export const classResolvers = {
       const patch: Record<string, unknown> = {};
       if (typeof args.input.nom === 'string') patch.nom = args.input.nom;
       if (typeof args.input.anneeScolaire === 'string') patch.anneeScolaire = args.input.anneeScolaire;
+      if (typeof args.input.levelId === 'string') {
+        const nextLevel = await ctx.db.query.levels.findFirst({ where: eq(levels.id, args.input.levelId) });
+        if (!nextLevel || nextLevel.schoolId !== existing.schoolId) {
+          throw new GraphQLError('Niveau introuvable dans cet établissement.', { extensions: { code: 'BAD_USER_INPUT' } });
+        }
+        patch.levelId = args.input.levelId;
+      }
 
       const [updated] = await ctx.db
         .update(classes)

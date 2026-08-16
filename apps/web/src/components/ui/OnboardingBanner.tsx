@@ -12,7 +12,10 @@ const STEPS = [
 ];
 
 export function OnboardingBanner({ totalClasses, totalStudents, totalTeachers }: Props) {
-  const [dismissed, setDismissed] = useState(false);
+  const [dismissed, setDismissed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('onboarding_dismissed') === '1';
+  });
 
   const done = {
     classes:  totalClasses  > 0,
@@ -34,7 +37,7 @@ export function OnboardingBanner({ totalClasses, totalStudents, totalTeachers }:
       {/* Subtle top stripe */}
       <div style={{ position:'absolute', top:0, left:0, right:0, height:3, background:'var(--tx-primary)', borderRadius:'16px 16px 0 0' }} />
 
-      <button onClick={() => setDismissed(true)} style={{
+      <button onClick={() => { setDismissed(true); localStorage.setItem('onboarding_dismissed', '1'); }} style={{
         position:'absolute', top:14, right:14, background:'none', border:'none',
         cursor:'pointer', padding:4, borderRadius:6, color:'var(--tx-muted)', transition:'all .15s',
       }}

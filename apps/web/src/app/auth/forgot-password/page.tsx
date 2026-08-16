@@ -54,7 +54,7 @@ export default function ForgotPasswordPage() {
               </div>
               <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--tx-primary)', marginBottom: 8, fontFamily: "'Sora', sans-serif" }}>Demande envoyée</h2>
               <p style={{ color: 'var(--tx-muted)', fontSize: 13, lineHeight: 1.6, marginBottom: 14 }}>
-                Si un compte correspond à <strong style={{ color: 'var(--tx-primary)' }}>{identifiant}</strong> et possède un email personnel, un nouveau mot de passe temporaire vient d'y être envoyé.
+                Si un compte correspond à <strong style={{ color: 'var(--tx-primary)' }}>{identifiant}</strong> et possède un email personnel, un lien de réinitialisation (valable 1 heure) vient d'y être envoyé.
               </p>
               <div style={{ background: 'var(--warn-bg)', borderRadius: 10, padding: 12, marginBottom: 20, textAlign: 'left', display: 'flex', gap: 10 }}>
                 <KeyRound size={15} style={{ color: 'var(--warn)', flexShrink: 0, marginTop: 1 }} />

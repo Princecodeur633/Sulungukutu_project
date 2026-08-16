@@ -9,7 +9,12 @@ import { db } from '../db';
 import { eq, count } from 'drizzle-orm';
 import { bulletins, bulletinDetails, classSubjects, subjects, students,
          schoolMemberships, globalProfiles, classes, levels, schools, payments } from '../db/schema';
-import { verifyAccessToken } from '../utils/jwt';
+import {
+  authenticateHttpRequest,
+  requireHttpStudentAccess,
+  sendHttpAuthError,
+} from '../middleware/http-auth';
+import type { JWTPayload } from '../utils/jwt';
 
 export function handlePdfRoute(req: IncomingMessage, res: ServerResponse): boolean {
   const url = parseUrl(req.url ?? '', true);
@@ -19,19 +24,17 @@ export function handlePdfRoute(req: IncomingMessage, res: ServerResponse): boole
   const recuMatch = url.pathname.match(/^\/pdf\/recu\/([^/]+)$/);
   if (recuMatch) {
     const paymentId = recuMatch[1];
-    const token = url.query.token as string | undefined;
-    if (!token) { res.writeHead(401); res.end('Token requis'); return true; }
-    let decoded: any;
-    try { decoded = verifyAccessToken(token); } catch {
-      res.writeHead(401); res.end('Token invalide'); return true;
-    }
-    generateRecuHtml(paymentId, decoded)
+    authenticateHttpRequest(req)
+      .then((user) => generateRecuHtml(paymentId, user))
       .then((html) => {
         if (!html) { res.writeHead(404); res.end('Paiement introuvable'); return; }
-        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'private, max-age=300' });
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'private, no-store' });
         res.end(html);
       })
-      .catch((err) => { console.error('[PDF recu]', err); res.writeHead(500); res.end('Erreur interne'); });
+      .catch((err) => {
+        if (sendHttpAuthError(res, err)) return;
+        console.error('[PDF recu]', err); res.writeHead(500); res.end('Erreur interne');
+      });
     return true;
   }
 
@@ -39,25 +42,9 @@ export function handlePdfRoute(req: IncomingMessage, res: ServerResponse): boole
   if (!match) return false;
 
   const bulletinId = match[1];
-  const token = url.query.token as string | undefined;
 
-  // Vérifier l'authentification
-  if (!token) {
-    res.writeHead(401, { 'Content-Type': 'text/plain' });
-    res.end('Token requis');
-    return true;
-  }
-
-  let decoded: any;
-  try {
-    decoded = verifyAccessToken(token);
-  } catch {
-    res.writeHead(401, { 'Content-Type': 'text/plain' });
-    res.end('Token invalide');
-    return true;
-  }
-
-  generateBulletinHtml(bulletinId, decoded)
+  authenticateHttpRequest(req)
+    .then((user) => generateBulletinHtml(bulletinId, user))
     .then((html) => {
       if (!html) {
         res.writeHead(404, { 'Content-Type': 'text/plain' });
@@ -66,11 +53,12 @@ export function handlePdfRoute(req: IncomingMessage, res: ServerResponse): boole
       }
       res.writeHead(200, {
         'Content-Type': 'text/html; charset=utf-8',
-        'Cache-Control': 'private, max-age=300',
+        'Cache-Control': 'private, no-store',
       });
       res.end(html);
     })
     .catch((err) => {
+      if (sendHttpAuthError(res, err)) return;
       console.error('[PDF] Erreur:', err);
       res.writeHead(500, { 'Content-Type': 'text/plain' });
       res.end('Erreur interne');
@@ -81,7 +69,7 @@ export function handlePdfRoute(req: IncomingMessage, res: ServerResponse): boole
 
 // ── Génération HTML ───────────────────────────────────────────
 
-export async function generateBulletinHtml(bulletinId: string, decoded: any): Promise<string | null> {
+export async function generateBulletinHtml(bulletinId: string, user: JWTPayload): Promise<string | null> {
   // Charger bulletin + détails + relations
   const bulletin = await db.query.bulletins.findFirst({
     where: eq(bulletins.id, bulletinId),
@@ -109,8 +97,13 @@ export async function generateBulletinHtml(bulletinId: string, decoded: any): Pr
 
   if (!bulletin) return null;
 
-  // Nombre d'élèves dans la classe pour le rang
   const studentId = (bulletin as any).student?.id;
+  const schoolId  = (bulletin as any).student?.class?.schoolId
+    ?? (bulletin as any).student?.membership?.schoolId;
+  if (!studentId || !schoolId) return null;
+  await requireHttpStudentAccess(user, studentId, schoolId);
+
+  // Nombre d'élèves dans la classe pour le rang
   const classId   = (bulletin as any).student?.class?.id;
   let classTotalStudents = 0;
   if (classId) {
@@ -498,7 +491,7 @@ export async function generateBulletinHtml(bulletinId: string, decoded: any): Pr
 }
 
 // ── Génération HTML reçu de paiement ─────────────────────────
-async function generateRecuHtml(paymentId: string, _decoded: any): Promise<string | null> {
+async function generateRecuHtml(paymentId: string, user: JWTPayload): Promise<string | null> {
   const payment = await db.query.payments.findFirst({
     where: eq(payments.id, paymentId),
     with: {
@@ -511,6 +504,12 @@ async function generateRecuHtml(paymentId: string, _decoded: any): Promise<strin
     },
   });
   if (!payment) return null;
+
+  const recuStudentId = (payment as any).student?.id;
+  const recuSchoolId  = (payment as any).student?.class?.schoolId
+    ?? (payment as any).student?.membership?.schoolId;
+  if (!recuStudentId || !recuSchoolId) return null;
+  await requireHttpStudentAccess(user, recuStudentId, recuSchoolId);
 
   const student  = (payment as any).student;
   const profile  = student?.membership?.profile;

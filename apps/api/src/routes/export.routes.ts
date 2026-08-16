@@ -9,13 +9,14 @@ import { parse as parseQs }  from 'querystring';
 import { db }                from '../db';
 import { exportService }     from '../services/export.service';
 import { generateBulletinHtml } from './pdf.routes';
-import { verifyAccessToken } from '../utils/jwt';
+import { authenticateHttpRequest, requireHttpClassInSchool, sendHttpAuthError, HttpAuthError } from '../middleware/http-auth';
+import type { JWTPayload } from '../utils/jwt';
 import { enforceRateLimit } from '../middleware/rate-limit';
 import { bulletins, students, classes } from '../db/schema';
 import { eq, and, inArray } from 'drizzle-orm';
 import * as zlib from 'zlib';
 
-type Handler = (req: IncomingMessage, res: ServerResponse, decoded: any) => Promise<void>;
+type Handler = (req: IncomingMessage, res: ServerResponse, decoded: JWTPayload) => Promise<void>;
 
 const FE_ORIGIN = process.env.FRONTEND_URL ?? 'http://localhost:3000';
 
@@ -107,22 +108,21 @@ const exportPayments: Handler = async (req, res, decoded) => {
 };
 
 /**
- * Vérifie que la classe demandée appartient bien à l'école de l'utilisateur
- * authentifié (SUPER_ADMIN excepté). Renvoie false (et écrit déjà la
- * réponse d'erreur) si l'accès doit être refusé.
+ * Vérifie que la classe demandée appartient à l'école de l'utilisateur
+ * ET que l'appelant est staff (admin / enseignant / super-admin).
  */
-async function assertClassInScope(res: ServerResponse, classId: string, decoded: any): Promise<boolean> {
-  if (decoded?.role === 'SUPER_ADMIN') return true;
-  const targetClass = await db.query.classes.findFirst({ where: eq(classes.id, classId) });
-  if (!targetClass) {
-    sendError(res, 404, 'Classe introuvable');
+async function assertClassInScope(res: ServerResponse, classId: string, decoded: JWTPayload): Promise<boolean> {
+  try {
+    await requireHttpClassInSchool(decoded, classId, true);
+    return true;
+  } catch (err) {
+    if (err instanceof HttpAuthError) {
+      sendError(res, err.status, err.message);
+      return false;
+    }
+    sendError(res, 500, 'Erreur interne');
     return false;
   }
-  if (targetClass.schoolId !== decoded?.schoolId) {
-    sendError(res, 403, 'Accès refusé — cette classe n\'appartient pas à votre établissement.');
-    return false;
-  }
-  return true;
 }
 
 /**
@@ -154,36 +154,23 @@ export function handleExport(req: IncomingMessage, res: ServerResponse): boolean
     return true;
   }
 
-  // Avant : on vérifiait uniquement que l'en-tête COMMENÇAIT par "Bearer " —
-  // sans jamais appeler verifyAccessToken. N'IMPORTE QUELLE chaîne après
-  // "Bearer " passait, permettant de télécharger la liste des élèves, les
-  // notes ou les paiements de N'IMPORTE QUELLE école, sans authentification
-  // réelle. Corrigé : le token est maintenant réellement vérifié ici, et
-  // chaque route vérifie en plus que la classe demandée appartient bien à
-  // l'école de l'appelant (voir assertClassInScope).
-  const authHeader = req.headers.authorization ?? '';
-  if (!authHeader.startsWith('Bearer ')) {
-    sendError(res, 401, 'Token requis');
-    return true;
-  }
-  const token = authHeader.replace('Bearer ', '');
-  let decoded: any;
-  try {
-    decoded = verifyAccessToken(token);
-  } catch {
-    sendError(res, 401, 'Token invalide ou expiré');
-    return true;
-  }
-
-  const route = url.replace('/export/', '');
-
-  switch (route) {
-    case 'students':      exportStudents(req, res, decoded); break;
-    case 'grades':        exportGrades(req, res, decoded);   break;
-    case 'payments':      exportPayments(req, res, decoded); break;
-    case 'bulletins-zip': exportBulletinsZip(req, res, decoded); break;
-    default:              sendError(res, 404, `Route /export/${route} introuvable`);
-  }
+  authenticateHttpRequest(req)
+    .then((decoded) => {
+      const route = url.replace('/export/', '');
+      switch (route) {
+        case 'students':      return exportStudents(req, res, decoded);
+        case 'grades':        return exportGrades(req, res, decoded);
+        case 'payments':      return exportPayments(req, res, decoded);
+        case 'bulletins-zip': return exportBulletinsZip(req, res, decoded);
+        default:
+          sendError(res, 404, `Route /export/${route} introuvable`);
+          return;
+      }
+    })
+    .catch((err) => {
+      if (sendHttpAuthError(res, err)) return;
+      sendError(res, 500, 'Erreur interne');
+    });
 
   return true;
 }
@@ -192,7 +179,7 @@ export function handleExport(req: IncomingMessage, res: ServerResponse): boolean
 async function exportBulletinsZip(
   req: IncomingMessage,
   res: ServerResponse,
-  decoded: any
+  decoded: JWTPayload
 ): Promise<void> {
   const url   = parseUrl(req.url ?? '', true);
   const classId    = url.query.classId    as string | undefined;

@@ -76,12 +76,12 @@ pnpm db:seed
 ```
 
 Ce seed crée :
-- 1 Super Admin + 1 Admin + 4 Enseignants + 1 Parent + 6 Élèves
-- 4 niveaux, 8 classes, 10 matières assignées
-- Notes T1/T2, bulletins T1 publiés, présences 5 jours
-- 6 messages de conversation réalistes
-- 5 notifications de démonstration
-- 3 annonces, 9 mensualités par élève
+- 1 Super Admin (`isSuperAdmin`) + 1 Admin + 4 Enseignants + 1 Parent + 6 Élèves
+- Collège provisionné : 4 niveaux, 8 classes, matières du référentiel national
+- Notes T1/T2, bulletins T1 publiés, présences 5 jours, emplois du temps
+- 6 messages de conversation, 5 notifications, 3 annonces
+- 9 mensualités par élève (T1 soldé, un acompte partiel pour Thomas)
+- Couleur d'accent de l'établissement (`accentColor`)
 
 ### 5. Lancer le développement
 
@@ -170,10 +170,13 @@ pnpm --filter api start:prod      # Démarrer avec migration auto
 
 ## 🔐 Sécurité
 
-- **Isolation multi-école** : chaque mutation vérifie que l'acteur appartient à l'école qu'il modifie (JWT schoolId forcé côté serveur)
-- **Rate limiting** : 120 req/min par IP en production, 10 tentatives de login/5 min (protection brute-force)
-- **Middleware Next.js** : validation JWT + contrôle de rôle sur toutes les routes protégées
-- **Tokens** : access token 7j + refresh token 30j, stockés en localStorage + cookie SameSite:Strict
+- **Isolation multi-école** : chaque mutation vérifie que l'acteur appartient à l'école qu'il modifie (le `schoolId` du JWT n'est jamais pris tel quel depuis le client)
+- **PDF / exports / imports** : authentification HTTP + contrôle d'accès (élève, parent, staff) ; cache `private, no-store`
+- **Révocation de session** : après un changement de mot de passe, les JWT déjà émis sont invalidés (`passwordChangedAt` vs `iat`)
+- **Reset mot de passe** : lien signé valable 1 h (`/auth/reset-password?token=`) ; reset admin en présentiel pour les comptes sans email
+- **Rate limiting** : 120 req/min par IP en production, 10 tentatives de login / 5 min (en mémoire — pas partagé entre instances)
+- **Middleware Next.js** : validation JWT + contrôle de rôle (y compris `SUPER_ADMIN` sur `/admin`)
+- **Tokens** : access token 7 j + refresh token 30 j ; le frontend renouvelle automatiquement en cas d'`UNAUTHENTICATED`. Stockage localStorage + cookie `SameSite=Strict` (`Secure` en HTTPS)
 
 ---
 
@@ -276,7 +279,7 @@ apps/api/src/
 
 apps/web/src/
 ├── app/                   # Pages Next.js (App Router)
-│   ├── admin/             # 13 pages administrateur
+│   ├── admin/             # 16 pages administrateur
 │   ├── teacher/           # 6 pages enseignant
 │   ├── parent/            # 5 pages parent
 │   ├── student/           # 7 pages élève

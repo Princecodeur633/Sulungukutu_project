@@ -5,50 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1779931590817,
-      "tag": "0000_dapper_yellowjacket",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1753142400000,
-      "tag": "0001_payment_transactions_and_amounts",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1753747200000,
-      "tag": "0002_national_referential_and_identity",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1754006400000,
-      "tag": "0003_soft_delete_pedagogy",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1754265600000,
-      "tag": "0004_soft_delete_students",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1754524800000,
-      "tag": "0005_soft_delete_records",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "7",
-      "when": 1754784000000,
-      "tag": "0006_unique_phone",
+      "when": 1786915449535,
+      "tag": "0000_old_saracen",
       "breakpoints": true
     }
   ]

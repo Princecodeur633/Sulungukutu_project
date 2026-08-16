@@ -42,6 +42,7 @@ function LoginPageInner() {
       // nouveau compte.
       await apolloClient.clearStore();
       tokenStorage.set(result.accessToken);
+      if (result.refreshToken) tokenStorage.setRefresh(result.refreshToken);
       const memberships = result.availableMemberships ?? [];
       if (memberships.length > 1) {
         sessionStorage.setItem('pending_memberships', JSON.stringify(memberships));
@@ -49,7 +50,14 @@ function LoginPageInner() {
         router.push('/auth/workspace'); return;
       }
       const membership = memberships[0] ?? result.currentMembership;
-      if (membership) { tokenStorage.setSchoolId(membership.school.id); router.push(ROLE_DASH[membership.role] ?? '/'); }
+      if (membership) {
+        tokenStorage.setSchoolId(membership.school.id);
+        router.push(ROLE_DASH[membership.role] ?? '/');
+        return;
+      }
+      if (result.profile) {
+        router.push('/superadmin/dashboard');
+      }
     } catch (err: any) {
       setError(err?.graphQLErrors?.[0]?.message ?? 'Email ou mot de passe incorrect');
     }
