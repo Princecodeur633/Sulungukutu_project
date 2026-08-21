@@ -4,7 +4,8 @@ import { useState, useRef, useCallback } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
 import { tokenStorage } from '@/lib/apollo/client';
 import { useToast } from '@/components/ui/Toast';
-import { Calendar, Plus, X, GripVertical, AlertTriangle } from 'lucide-react';
+import { Calendar, Plus, X, GripVertical, AlertTriangle, Clock } from 'lucide-react';
+import { FormModal, FormField, FormSection, FormGrid, FormActions, ChoiceChip } from '@/components/ui/FormModal';
 import {
   CLASSES_BY_SCHOOL_QUERY,
   CLASS_SUBJECTS_BY_CLASS_QUERY,
@@ -65,64 +66,62 @@ function SlotModal({ classSubjects, pre, onClose, onSaved }: {
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-[var(--bg-card)] rounded-2xl shadow-2xl w-full max-w-sm p-6 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-5">
-          <h2 className="text-base font-bold text-[var(--tx-primary)]">Nouveau créneau</h2>
-          <button onClick={onClose}><X size={18} className="text-[var(--tx-muted)]" /></button>
-        </div>
-        <div className="space-y-3">
-          <div>
-            <label className="label">Matière · Enseignant *</label>
-            <select className="input text-sm" value={form.classSubjectId} onChange={e => f('classSubjectId', e.target.value)} autoFocus>
-              <option value="">Sélectionner...</option>
-              {classSubjects.map((cs: any) => (
-                <option key={cs.id} value={cs.id}>{cs.subject?.nom} — {cs.teacher?.profile?.prenom} {cs.teacher?.profile?.nom}</option>
-              ))}
-            </select>
+    <FormModal
+      title="Nouveau créneau"
+      subtitle="Matière, jour et horaires — les conflits enseignant sont signalés avant validation."
+      icon={<Calendar size={18} style={{ color: 'var(--accent)' }} />}
+      onClose={onClose}
+      onSubmit={() => onSaved({ ...form, jour: parseInt(form.jour) })}
+      maxWidth={460}
+      footer={
+        <FormActions
+          submitLabel="Ajouter"
+          onCancel={onClose}
+          disabled={!form.classSubjectId || !!conflict}
+        />
+      }
+    >
+      <FormSection icon={<Clock size={14} style={{ color: 'var(--accent)' }} />} title="Créneau">
+        <FormField label="Matière · enseignant" required>
+          <select className="input" value={form.classSubjectId} onChange={e => f('classSubjectId', e.target.value)} autoFocus>
+            <option value="">Sélectionner…</option>
+            {classSubjects.map((cs: any) => (
+              <option key={cs.id} value={cs.id}>{cs.subject?.nom} — {cs.teacher?.profile?.prenom} {cs.teacher?.profile?.nom}</option>
+            ))}
+          </select>
+        </FormField>
+        <FormField label="Jour" required>
+          <div className="flex gap-1.5">
+            {[1,2,3,4,5].map(j => (
+              <ChoiceChip key={j} compact selected={form.jour === String(j)} onClick={() => f('jour', String(j))}>
+                {JOURS_SHORT[j]}
+              </ChoiceChip>
+            ))}
           </div>
-          <div>
-            <label className="label">Jour *</label>
-            <div className="flex gap-1.5">
-              {[1,2,3,4,5].map(j => (
-                <button key={j} type="button" onClick={() => f('jour', String(j))}
-                  className={`flex-1 py-1.5 rounded-lg text-xs font-semibold border transition-all ${form.jour === String(j) ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-[var(--bg-card)] border-[var(--bd)] text-[var(--tx-secondary)]'}`}>
-                  {JOURS_SHORT[j]}
-                </button>
-              ))}
-            </div>
+        </FormField>
+        <FormGrid>
+          <FormField label="Début">
+            <input className="input" type="time" value={form.heureDebut} onChange={e => f('heureDebut', e.target.value)} />
+          </FormField>
+          <FormField label="Fin">
+            <input className="input" type="time" value={form.heureFin} onChange={e => f('heureFin', e.target.value)} />
+          </FormField>
+        </FormGrid>
+        <FormField label="Salle" hint="Facultatif">
+          <input className="input" value={form.salle} onChange={e => f('salle', e.target.value)} placeholder="Ex. A101" />
+        </FormField>
+        {conflict && (
+          <div style={{ display: 'flex', gap: 8, padding: '10px 12px', background: 'var(--err-bg)', borderRadius: 10, alignItems: 'flex-start' }}>
+            <AlertTriangle size={14} style={{ color: 'var(--err)', flexShrink: 0, marginTop: 1 }} />
+            <p style={{ fontSize: 12, color: 'var(--err)', lineHeight: 1.5 }}>
+              {selectedCs?.teacher?.profile?.prenom} {selectedCs?.teacher?.profile?.nom} a déjà cours
+              en <strong>{conflict.classSubject?.class?.nom}</strong> ({conflict.classSubject?.subject?.nom})
+              de {conflict.heureDebut} à {conflict.heureFin} ce jour-là.
+            </p>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div><label className="label">Début</label><input className="input text-sm" type="time" value={form.heureDebut} onChange={e => f('heureDebut', e.target.value)} /></div>
-            <div><label className="label">Fin</label><input className="input text-sm" type="time" value={form.heureFin} onChange={e => f('heureFin', e.target.value)} /></div>
-          </div>
-          <div><label className="label">Salle</label><input className="input text-sm" value={form.salle} onChange={e => f('salle', e.target.value)} placeholder="ex: A101..." /></div>
-
-          {conflict && (
-            <div style={{ display: 'flex', gap: 8, padding: '10px 12px', background: 'var(--err-bg)', borderRadius: 8, alignItems: 'flex-start' }}>
-              <AlertTriangle size={14} style={{ color: 'var(--err)', flexShrink: 0, marginTop: 1 }} />
-              <p style={{ fontSize: 12, color: 'var(--err)', lineHeight: 1.5 }}>
-                {selectedCs?.teacher?.profile?.prenom} {selectedCs?.teacher?.profile?.nom} a déjà cours
-                en <strong>{conflict.classSubject?.class?.nom}</strong> ({conflict.classSubject?.subject?.nom})
-                de {conflict.heureDebut} à {conflict.heureFin} ce jour-là.
-              </p>
-            </div>
-          )}
-        </div>
-        <div className="flex justify-end gap-2 mt-5">
-          <button onClick={onClose} className="btn-secondary text-sm py-2">Annuler</button>
-          <button
-            onClick={() => onSaved({ ...form, jour: parseInt(form.jour) })}
-            disabled={!form.classSubjectId || !!conflict}
-            title={conflict ? 'Conflit détecté — choisissez un autre horaire' : undefined}
-            className="btn-primary text-sm py-2"
-          >
-            Ajouter
-          </button>
-        </div>
-      </div>
-    </div>
+        )}
+      </FormSection>
+    </FormModal>
   );
 }
 

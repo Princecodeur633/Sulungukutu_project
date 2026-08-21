@@ -4,10 +4,11 @@ import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useQuery, useMutation } from '@apollo/client';
 import {
-  UserPlus, Search, Filter, Download,
+  UserPlus, Search, Download,
   Eye, Edit, Trash2, GraduationCap, ChevronLeft, ChevronRight,
-  Upload, Copy
+  Upload, Copy, User, Users,
 } from 'lucide-react';
+import { FormModal, FormField, FormSection, FormGrid, FormActions } from '@/components/ui/FormModal';
 import {
   STUDENTS_BY_CLASS_QUERY,
   CLASSES_BY_SCHOOL_QUERY,
@@ -121,53 +122,38 @@ function EditStudentModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-[var(--bg-card)] rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-        <div className="px-6 py-5 border-b border-[var(--bd)] flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-bold text-[var(--tx-primary)]">Modifier l'élève</h2>
-            <p className="text-sm text-[var(--tx-muted)]">
-              {profile?.prenom} {profile?.nom}
-            </p>
-          </div>
-          <button onClick={onClose} className="text-[var(--tx-muted)] hover:text-[var(--tx-secondary)] text-xl">×</button>
-        </div>
-        <div className="p-6 space-y-4">
-          <div>
-            <label className="label">Classe</label>
-            <select className="input" value={form.classId}
-              onChange={(e) => set('classId', e.target.value)}>
-              <option value="">— Inchangé —</option>
-              {classes.map((c: any) => (
-                <option key={c.id} value={c.id}>{c.nom} — {c.level?.nom}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="label">Sexe</label>
-            <select className="input" value={form.sexe}
-              onChange={(e) => set('sexe', e.target.value)}>
+    <FormModal
+      title="Modifier l'élève"
+      subtitle={`${profile?.prenom ?? ''} ${profile?.nom ?? ''}`.trim()}
+      icon={<GraduationCap size={18} style={{ color: 'var(--accent)' }} />}
+      onClose={onClose}
+      onSubmit={handleSave}
+      maxWidth={480}
+      footer={<FormActions submitLabel="Enregistrer" loading={loading} onCancel={onClose} />}
+    >
+      <FormSection icon={<User size={14} style={{ color: 'var(--accent)' }} />} title="Scolarité">
+        <FormField label="Classe">
+          <select className="input" value={form.classId} onChange={(e) => set('classId', e.target.value)}>
+            <option value="">— Inchangé —</option>
+            {classes.map((c: any) => (
+              <option key={c.id} value={c.id}>{c.nom} — {c.level?.nom}</option>
+            ))}
+          </select>
+        </FormField>
+        <FormGrid>
+          <FormField label="Sexe">
+            <select className="input" value={form.sexe} onChange={(e) => set('sexe', e.target.value)}>
               <option value="">—</option>
               <option value="M">Masculin</option>
               <option value="F">Féminin</option>
             </select>
-          </div>
-          <div>
-            <label className="label">Date de naissance</label>
-            <input className="input" type="date" value={form.dateNaissance}
-              onChange={(e) => set('dateNaissance', e.target.value)} />
-          </div>
-        </div>
-        <div className="px-6 py-4 border-t border-[var(--bd)] flex justify-end gap-3">
-          <button onClick={onClose} className="btn-secondary">Annuler</button>
-          <button onClick={handleSave} disabled={loading} className="btn-primary">
-            {loading ? 'Sauvegarde...' : 'Enregistrer'}
-          </button>
-        </div>
-      </div>
-
-    </div>
+          </FormField>
+          <FormField label="Date de naissance">
+            <input className="input" type="date" value={form.dateNaissance} onChange={(e) => set('dateNaissance', e.target.value)} />
+          </FormField>
+        </FormGrid>
+      </FormSection>
+    </FormModal>
   );
 }
 
@@ -184,11 +170,9 @@ function StudentCreatedModal({
   const studentPassword = student?.tempPassword;
   const studentCode     = student?.membership?.profile?.code ?? student?.membership?.code;
   const studentMatricule = student?.matricule;
-  const studentPhone    = student?.membership?.profile?.phone;
   const parent = student?.parents?.[0]?.parent;
   const parentPassword = student?.parentTempPassword;
   const parentCode     = parent?.profile?.code;
-  const parentPhone    = parent?.profile?.phone;
   const parentLabel = [parent?.profile?.prenom, parent?.profile?.nom].filter(Boolean).join(' ').trim();
 
   const copyPassword = async (value: string) => {
@@ -202,92 +186,82 @@ function StudentCreatedModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-[var(--bg-card)] rounded-2xl shadow-2xl w-full max-w-lg p-6 text-center max-h-[90vh] overflow-y-auto">
-        <div className="w-16 h-16 rounded-full bg-[var(--ok-bg)] flex items-center justify-center mx-auto mb-4">
-          <UserPlus size={28} className="text-[var(--ok)]" />
+    <FormModal
+      title="Élève inscrit"
+      subtitle="Identifiants temporaires à transmettre à la famille. Ils ne seront plus visibles après fermeture."
+      icon={<UserPlus size={18} style={{ color: 'var(--accent)' }} />}
+      onClose={onClose}
+      dismissOnOverlay={false}
+      asForm={false}
+      maxWidth={560}
+      footer={
+        <div style={{ padding: '14px 22px', borderTop: '1px solid var(--bd)' }}>
+          <button type="button" onClick={onClose} className="btn-primary" style={{ width: '100%' }}>
+            J&apos;ai noté — Fermer
+          </button>
         </div>
-        <h2 className="text-xl font-bold text-[var(--tx-primary)] mb-2">Élève inscrit avec succès</h2>
-        <p className="text-[var(--tx-muted)] text-sm mb-5">
-          Voici les identifiants temporaires à partager avec l'élève et son parent / tuteur.
-          Sans email personnel, la connexion se fait avec l'identifiant ci-dessous
-          (code STU-… ou matricule {student?.matricule})
-          {studentPhone || parentPhone ? ' — ou le numéro de téléphone renseigné' : ''}.
-        </p>
-
-        <div className="space-y-3 text-left">
-          <div className="bg-[var(--bg-subtle)] rounded-xl p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--tx-muted)]">Identifiant de connexion élève</p>
-            <div className="mt-1 flex items-center justify-between gap-3">
-              <div className="font-mono text-sm font-bold text-[var(--tx-primary)] break-all">{studentCode}</div>
-              <button
-                onClick={() => studentCode && copyPassword(studentCode)}
-                className="btn-secondary px-3 py-2 text-sm whitespace-nowrap"
-              >
+      }
+    >
+      <FormSection icon={<GraduationCap size={14} style={{ color: 'var(--accent)' }} />} title="Compte élève">
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--bd)', borderRadius: 10, padding: '10px 14px' }}>
+          <p style={{ fontSize: 10.5, color: 'var(--tx-muted)', fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase' }}>Identifiant</p>
+          <div className="mt-1 flex items-center justify-between gap-3">
+            <p className="font-mono text-sm font-bold text-[var(--tx-primary)] break-all">{studentCode}</p>
+            {studentCode && (
+              <button type="button" onClick={() => copyPassword(studentCode)} className="btn-secondary px-3 py-2 text-sm whitespace-nowrap">
                 {copiedPassword === studentCode ? '✓ Copié' : <><Copy size={14} className="mr-1" /> Copier</>}
               </button>
-            </div>
-            {studentMatricule && (
-              <p className="text-xs text-[var(--tx-muted)] mt-2">
-                Matricule aussi accepté : <span className="font-mono font-semibold text-[var(--tx-secondary)]">{studentMatricule}</span>
-              </p>
             )}
           </div>
-          <div className="bg-[var(--bg-subtle)] rounded-xl p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--tx-muted)]">Mot de passe élève</p>
-            <div className="mt-2 flex items-center justify-between gap-3">
-              <div className="font-mono text-sm font-bold text-[var(--tx-primary)] break-all">
-                {studentPassword ?? 'Compte déjà existant — utilisez le mot de passe connu'}
-              </div>
-              {studentPassword && (
-              <button
-                onClick={() => studentPassword && copyPassword(studentPassword)}
-                className="btn-secondary px-3 py-2 text-sm whitespace-nowrap"
-              >
+          {studentMatricule && (
+            <p className="text-xs text-[var(--tx-muted)] mt-2">
+              Matricule aussi accepté : <span className="font-mono font-semibold">{studentMatricule}</span>
+            </p>
+          )}
+        </div>
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--bd)', borderRadius: 10, padding: '10px 14px' }}>
+          <p style={{ fontSize: 10.5, color: 'var(--tx-muted)', fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase' }}>Mot de passe</p>
+          <div className="mt-1 flex items-center justify-between gap-3">
+            <p className="font-mono text-sm font-bold text-[var(--tx-primary)] break-all">
+              {studentPassword ?? 'Compte déjà existant — mot de passe connu'}
+            </p>
+            {studentPassword && (
+              <button type="button" onClick={() => copyPassword(studentPassword)} className="btn-secondary px-3 py-2 text-sm whitespace-nowrap">
                 {copiedPassword === studentPassword ? '✓ Copié' : <><Copy size={14} className="mr-1" /> Copier</>}
               </button>
+            )}
+          </div>
+        </div>
+      </FormSection>
+
+      {parentPassword ? (
+        <FormSection icon={<Users size={14} style={{ color: 'var(--accent)' }} />} title="Compte parent / tuteur">
+          {parentLabel && <p className="text-sm text-[var(--tx-primary)] -mt-1">{parentLabel}</p>}
+          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--bd)', borderRadius: 10, padding: '10px 14px' }}>
+            <p style={{ fontSize: 10.5, color: 'var(--tx-muted)', fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase' }}>Identifiant</p>
+            <div className="mt-1 flex items-center justify-between gap-3">
+              <p className="font-mono text-sm font-bold break-all">{parentCode}</p>
+              {parentCode && (
+                <button type="button" onClick={() => copyPassword(parentCode)} className="btn-secondary px-3 py-2 text-sm whitespace-nowrap">
+                  {copiedPassword === parentCode ? '✓ Copié' : <><Copy size={14} className="mr-1" /> Copier</>}
+                </button>
               )}
             </div>
           </div>
-
-          {parentPassword ? (
-            <div className="bg-[var(--bg-subtle)] rounded-xl p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--tx-muted)]">Identifiant de connexion parent / tuteur</p>
-              {parentLabel && <p className="text-sm text-[var(--tx-primary)] mt-1">{parentLabel}</p>}
-              <div className="mt-1 flex items-center justify-between gap-3">
-                <div className="font-mono text-sm font-bold text-[var(--tx-primary)] break-all">{parentCode}</div>
-                <button
-                  onClick={() => parentCode && copyPassword(parentCode)}
-                  className="btn-secondary px-3 py-2 text-sm whitespace-nowrap"
-                >
-                  {copiedPassword === parentCode ? '✓ Copié' : <><Copy size={14} className="mr-1" /> Copier</>}
-                </button>
-              </div>
+          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--bd)', borderRadius: 10, padding: '10px 14px' }}>
+            <p style={{ fontSize: 10.5, color: 'var(--tx-muted)', fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase' }}>Mot de passe</p>
+            <div className="mt-1 flex items-center justify-between gap-3">
+              <p className="font-mono text-sm font-bold break-all">{parentPassword}</p>
+              <button type="button" onClick={() => copyPassword(parentPassword)} className="btn-secondary px-3 py-2 text-sm whitespace-nowrap">
+                {copiedPassword === parentPassword ? '✓ Copié' : <><Copy size={14} className="mr-1" /> Copier</>}
+              </button>
             </div>
-          ) : null}
-          {parentPassword ? (
-            <div className="bg-[var(--bg-subtle)] rounded-xl p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--tx-muted)]">Mot de passe parent / tuteur</p>
-              {parentLabel && <p className="text-sm text-[var(--tx-primary)] mt-1">{parentLabel}</p>}
-              <div className="mt-2 flex items-center justify-between gap-3">
-                <div className="font-mono text-sm font-bold text-[var(--tx-primary)] break-all">{parentPassword}</div>
-                <button
-                  onClick={() => parentPassword && copyPassword(parentPassword)}
-                  className="btn-secondary px-3 py-2 text-sm whitespace-nowrap"
-                >
-                  {copiedPassword === parentPassword ? '✓ Copié' : <><Copy size={14} className="mr-1" /> Copier</>}
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="text-sm text-[var(--tx-muted)]">Aucun parent / tuteur n’a été renseigné pour cet élève.</div>
-          )}
-        </div>
-
-        <button onClick={onClose} className="btn-primary w-full justify-center mt-5">Fermer</button>
-      </div>
-    </div>
+          </div>
+        </FormSection>
+      ) : (
+        <p className="text-sm text-[var(--tx-muted)]">Aucun parent / tuteur n’a été renseigné pour cet élève.</p>
+      )}
+    </FormModal>
   );
 }
 
@@ -421,108 +395,91 @@ function CreateStudentModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-[var(--bg-card)] rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh]
-                      overflow-y-auto">
-        <div className="px-6 py-5 border-b border-[var(--bd)] flex items-center justify-between">
-          <h2 className="text-lg font-bold text-[var(--tx-primary)]">Inscrire un élève</h2>
-          <button onClick={onClose} className="text-[var(--tx-muted)] hover:text-[var(--tx-secondary)] text-xl">×</button>
-        </div>
+    <FormModal
+      title="Inscrire un élève"
+      subtitle="Compte élève, classe, et parent / tuteur optionnel."
+      icon={<UserPlus size={18} style={{ color: 'var(--accent)' }} />}
+      onClose={onClose}
+      onSubmit={handleSubmit}
+      maxWidth={680}
+      footer={
+        <FormActions
+          hint="Un mot de passe temporaire sera affiché ensuite."
+          submitLabel="Inscrire l'élève"
+          loading={loading}
+          onCancel={onClose}
+          disabled={!form.nom || !form.prenom || !form.classId}
+        />
+      }
+    >
+      <FormSection icon={<GraduationCap size={14} style={{ color: 'var(--accent)' }} />} title="Élève">
+        <FormGrid>
+          <FormField label="Prénom" required>
+            <input className="input" autoFocus value={form.prenom} onChange={(e) => set('prenom', e.target.value)} placeholder="Amina" />
+          </FormField>
+          <FormField label="Nom" required>
+            <input className="input" value={form.nom} onChange={(e) => set('nom', e.target.value)} placeholder="Koubilat" />
+          </FormField>
+        </FormGrid>
+        <FormGrid>
+          <FormField label="Email" hint="Facultatif">
+            <input className="input" type="email" value={form.email} onChange={(e) => set('email', e.target.value)} placeholder="eleve@ecole.cg" />
+          </FormField>
+          <FormField label="Téléphone" hint="Facultatif">
+            <input className="input" value={form.phone} onChange={(e) => set('phone', e.target.value)} placeholder="06 xxx xx xx" />
+          </FormField>
+        </FormGrid>
+        <FormGrid>
+          <FormField label="Classe" required>
+            <select className="input" value={form.classId} onChange={(e) => set('classId', e.target.value)}>
+              <option value="">Sélectionner…</option>
+              {classes.map((c: any) => (
+                <option key={c.id} value={c.id}>{c.nom} — {c.level?.nom}</option>
+              ))}
+            </select>
+          </FormField>
+          <FormField label="Sexe">
+            <select className="input" value={form.sexe} onChange={(e) => set('sexe', e.target.value)}>
+              <option value="">—</option>
+              <option value="M">Masculin</option>
+              <option value="F">Féminin</option>
+            </select>
+          </FormField>
+        </FormGrid>
+        <FormField label="Date de naissance">
+          <input className="input" type="date" value={form.dateNaissance} onChange={(e) => set('dateNaissance', e.target.value)} />
+        </FormField>
+      </FormSection>
 
-        <div className="p-6 space-y-5">
-          {/* Infos élève */}
-          <div>
-            <h3 className="text-sm font-semibold text-[var(--tx-muted)] uppercase tracking-wider mb-3">
-              Informations de l'élève
-            </h3>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="label">Prénom *</label>
-                <input className="input" value={form.prenom} onChange={(e) => set('prenom', e.target.value)} />
-              </div>
-              <div>
-                <label className="label">Nom *</label>
-                <input className="input" value={form.nom} onChange={(e) => set('nom', e.target.value)} />
-              </div>
-              <div>
-                <label className="label">Email</label>
-                <input className="input" type="email" value={form.email} onChange={(e) => set('email', e.target.value)} />
-              </div>
-              <div>
-                <label className="label">Téléphone</label>
-                <input className="input" value={form.phone} onChange={(e) => set('phone', e.target.value)} />
-              </div>
-              <div>
-                <label className="label">Classe *</label>
-                <select className="input" value={form.classId} onChange={(e) => set('classId', e.target.value)}>
-                  <option value="">Sélectionner...</option>
-                  {classes.map((c: any) => (
-                    <option key={c.id} value={c.id}>{c.nom} — {c.level?.nom}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="label">Sexe</label>
-                <select className="input" value={form.sexe} onChange={(e) => set('sexe', e.target.value)}>
-                  <option value="">—</option>
-                  <option value="M">Masculin</option>
-                  <option value="F">Féminin</option>
-                </select>
-              </div>
-              <div>
-                <label className="label">Date de naissance</label>
-                <input className="input" type="date" value={form.dateNaissance} onChange={(e) => set('dateNaissance', e.target.value)} />
-              </div>
-            </div>
-          </div>
-
-          {/* Infos parent */}
-          <div>
-            <h3 className="text-sm font-semibold text-[var(--tx-muted)] uppercase tracking-wider mb-1">
-              Parent / Tuteur
-            </h3>
-            <p className="text-xs text-[var(--tx-muted)] mb-3">
-              Renseignez au moins le nom, un téléphone ou un email pour créer le compte parent et le lier à l'élève.
-            </p>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="label">Prénom parent</label>
-                <input className="input" value={form.parentPrenom} onChange={(e) => set('parentPrenom', e.target.value)} />
-              </div>
-              <div>
-                <label className="label">Nom parent</label>
-                <input className="input" value={form.parentNom} onChange={(e) => set('parentNom', e.target.value)} />
-              </div>
-              <div>
-                <label className="label">Email parent</label>
-                <input className="input" type="email" value={form.parentEmail} onChange={(e) => set('parentEmail', e.target.value)} />
-              </div>
-              <div>
-                <label className="label">Téléphone parent</label>
-                <input className="input" value={form.parentPhone} onChange={(e) => set('parentPhone', e.target.value)} />
-              </div>
-              <div>
-                <label className="label">Lien</label>
-                <select className="input" value={form.parentLien} onChange={(e) => set('parentLien', e.target.value)}>
-                  <option value="PERE">Père</option>
-                  <option value="MERE">Mère</option>
-                  <option value="TUTEUR">Tuteur</option>
-                </select>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="px-6 py-4 border-t border-[var(--bd)] flex justify-end gap-3">
-          <button onClick={onClose} className="btn-secondary">Annuler</button>
-          <button onClick={handleSubmit} disabled={loading} className="btn-primary">
-            {loading ? 'Inscription...' : 'Inscrire l\'élève'}
-          </button>
-        </div>
-      </div>
-
-    </div>
+      <FormSection icon={<Users size={14} style={{ color: 'var(--accent)' }} />} title="Parent / tuteur">
+        <p className="text-xs text-[var(--tx-muted)] -mt-1">
+          Renseignez au moins le nom, un téléphone ou un email pour créer le compte parent.
+        </p>
+        <FormGrid>
+          <FormField label="Prénom">
+            <input className="input" value={form.parentPrenom} onChange={(e) => set('parentPrenom', e.target.value)} />
+          </FormField>
+          <FormField label="Nom">
+            <input className="input" value={form.parentNom} onChange={(e) => set('parentNom', e.target.value)} />
+          </FormField>
+        </FormGrid>
+        <FormGrid>
+          <FormField label="Email">
+            <input className="input" type="email" value={form.parentEmail} onChange={(e) => set('parentEmail', e.target.value)} />
+          </FormField>
+          <FormField label="Téléphone">
+            <input className="input" value={form.parentPhone} onChange={(e) => set('parentPhone', e.target.value)} />
+          </FormField>
+        </FormGrid>
+        <FormField label="Lien">
+          <select className="input" value={form.parentLien} onChange={(e) => set('parentLien', e.target.value)}>
+            <option value="PERE">Père</option>
+            <option value="MERE">Mère</option>
+            <option value="TUTEUR">Tuteur</option>
+          </select>
+        </FormField>
+      </FormSection>
+    </FormModal>
   );
 }
 

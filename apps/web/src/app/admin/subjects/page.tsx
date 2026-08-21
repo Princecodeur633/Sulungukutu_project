@@ -8,6 +8,7 @@ import { useQuery, useMutation } from '@apollo/client';
 import { tokenStorage } from '@/lib/apollo/client';
 import { useToast } from '@/components/ui/Toast';
 import { Layers, Plus, Edit, Trash2, BookOpen } from 'lucide-react';
+import { FormModal, FormField, FormSection, FormActions } from '@/components/ui/FormModal';
 
 function SubjectModal({
   schoolId, subject, onClose, onSaved,
@@ -31,33 +32,34 @@ function SubjectModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-[var(--bg-card)] rounded-2xl shadow-2xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
-        <h2 className="text-lg font-bold text-[var(--tx-primary)] mb-5">
-          {isEdit ? 'Modifier la matière' : 'Nouvelle matière'}
-        </h2>
-        <div className="space-y-3">
-          <div>
-            <label className="label">Nom de la matière *</label>
-            <input className="input" value={nom} onChange={(e) => setNom(e.target.value)}
-              placeholder="ex: Mathématiques, SVT, Histoire-Géo..." />
-          </div>
-          <div>
-            <label className="label">Description</label>
-            <textarea className="input resize-none" rows={3} value={desc}
-              onChange={(e) => setDesc(e.target.value)}
-              placeholder="Description optionnelle..." />
-          </div>
-        </div>
-        <div className="flex justify-end gap-3 mt-5">
-          <button onClick={onClose} className="btn-secondary">Annuler</button>
-          <button onClick={handleSave} disabled={lc || lu} className="btn-primary">
-            {lc || lu ? 'Sauvegarde...' : isEdit ? 'Enregistrer' : 'Créer'}
-          </button>
-        </div>
-      </div>
-    </div>
+    <FormModal
+      title={isEdit ? 'Modifier la matière' : 'Nouvelle matière'}
+      subtitle={isEdit ? 'Mettez à jour le nom ou la description.' : 'Elle pourra ensuite être assignée aux classes.'}
+      icon={<BookOpen size={18} style={{ color: 'var(--accent)' }} />}
+      onClose={onClose}
+      onSubmit={handleSave}
+      maxWidth={480}
+      footer={
+        <FormActions
+          submitLabel={isEdit ? 'Enregistrer' : 'Créer la matière'}
+          loading={lc || lu}
+          onCancel={onClose}
+          disabled={!nom.trim()}
+        />
+      }
+    >
+      <FormSection icon={<Layers size={14} style={{ color: 'var(--accent)' }} />} title="Matière">
+        <FormField label="Nom" required>
+          <input className="input" autoFocus value={nom} onChange={(e) => setNom(e.target.value)}
+            placeholder="Ex. Mathématiques, SVT, Histoire-Géo" />
+        </FormField>
+        <FormField label="Description" hint="Facultatif">
+          <textarea className="input resize-none" rows={3} value={desc}
+            onChange={(e) => setDesc(e.target.value)}
+            placeholder="Précisions pour l’équipe pédagogique…" />
+        </FormField>
+      </FormSection>
+    </FormModal>
   );
 }
 

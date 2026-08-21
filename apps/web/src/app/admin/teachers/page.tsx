@@ -12,9 +12,10 @@ import { tokenStorage } from '@/lib/apollo/client';
 import { useToast } from '@/components/ui/Toast';
 import { useActionToast } from '@/hooks/useActionToast';
 import {
-  Users, Plus, Mail, Phone, Key, BookOpen,
-  ChevronLeft, ChevronRight, ToggleLeft, ToggleRight, Search,
+  Users, Plus, Mail, Phone, BookOpen,
+  ChevronLeft, ChevronRight, ToggleLeft, ToggleRight, Search, User,
 } from 'lucide-react';
+import { FormModal, FormField, FormSection, FormGrid, FormActions, CredentialsModal } from '@/components/ui/FormModal';
 
 // ── Modal invitation ──────────────────────────────────────────
 function InviteTeacherModal({
@@ -45,73 +46,53 @@ function InviteTeacherModal({
   };
 
   if (tempPassword) return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
-      <div className="relative bg-[var(--bg-card)] rounded-2xl shadow-2xl w-full max-w-md p-6 text-center max-h-[90vh] overflow-y-auto">
-        <div className="w-16 h-16 rounded-full bg-[var(--ok-bg)] flex items-center justify-center mx-auto mb-4">
-          <Key size={28} className="text-[var(--ok)]" />
-        </div>
-        <h2 className="text-xl font-bold text-[var(--tx-primary)] mb-2">Compte créé !</h2>
-        <p className="text-[var(--tx-muted)] text-sm mb-4">
-          Communiquez ce mot de passe temporaire à l'enseignant.
-          Il devra le changer à sa première connexion.
-        </p>
-        <div className="bg-[var(--bg-subtle)] rounded-xl p-4 mb-2 text-left">
-          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--tx-muted)] mb-1">Identifiant de connexion</p>
-          <p className="font-mono text-sm font-bold text-[var(--tx-primary)] break-all mb-3">{loginIdentifiant}</p>
-          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--tx-muted)] mb-1">Mot de passe temporaire</p>
-          <p className="font-mono text-xl font-bold tracking-widest text-[var(--tx-primary)] select-all cursor-text" title="Cliquez pour sélectionner">
-            {tempPassword}
-          </p>
-        </div>
-        <button
-          onClick={() => navigator.clipboard?.writeText(`${loginIdentifiant} / ${tempPassword}`)}
-          className="btn-secondary w-full justify-center mb-3 text-sm"
-        >
-          📋 Copier l'identifiant et le mot de passe
-        </button>
-        <p className="text-xs text-[var(--tx-muted)] mb-4">
-          Il pourra le changer depuis son profil après connexion.
-        </p>
-        <button onClick={() => { onInvited(); onClose(); }} className="btn-primary w-full justify-center">Fermer</button>
-      </div>
-    </div>
+    <CredentialsModal
+      title="Compte enseignant créé"
+      subtitle={`${form.prenom} ${form.nom}`.trim()}
+      identifiant={loginIdentifiant}
+      password={tempPassword}
+      recap={`${loginIdentifiant} / ${tempPassword}`}
+      onClose={() => { onInvited(); onClose(); }}
+    />
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-[var(--bg-card)] rounded-2xl shadow-2xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
-        <h2 className="text-lg font-bold text-[var(--tx-primary)] mb-5">Ajouter un enseignant</h2>
-        <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="label">Prénom *</label>
-              <input className="input" value={form.prenom} onChange={(e) => set('prenom', e.target.value)} />
-            </div>
-            <div>
-              <label className="label">Nom *</label>
-              <input className="input" value={form.nom} onChange={(e) => set('nom', e.target.value)} />
-            </div>
-          </div>
-          <div>
-            <label className="label">Email *</label>
-            <input className="input" type="email" value={form.email}
-              onChange={(e) => set('email', e.target.value)} />
-          </div>
-          <div>
-            <label className="label">Téléphone</label>
-            <input className="input" value={form.phone} onChange={(e) => set('phone', e.target.value)} />
-          </div>
-        </div>
-        <div className="flex justify-end gap-3 mt-5">
-          <button onClick={onClose} className="btn-secondary">Annuler</button>
-          <button onClick={handleInvite} disabled={loading} className="btn-primary">
-            {loading ? 'Création...' : 'Créer le compte'}
-          </button>
-        </div>
-      </div>
-    </div>
+    <FormModal
+      title="Ajouter un enseignant"
+      subtitle="Un mot de passe temporaire sera généré à la création."
+      icon={<Users size={18} style={{ color: 'var(--accent)' }} />}
+      onClose={onClose}
+      onSubmit={handleInvite}
+      maxWidth={520}
+      footer={
+        <FormActions
+          hint="Email ou téléphone — au moins l'un des deux."
+          submitLabel="Créer le compte"
+          loading={loading}
+          onCancel={onClose}
+          disabled={!form.nom || !form.prenom || !(form.email || form.phone)}
+        />
+      }
+    >
+      <FormSection icon={<User size={14} style={{ color: 'var(--accent)' }} />} title="Identité">
+        <FormGrid>
+          <FormField label="Prénom" required>
+            <input className="input" autoFocus value={form.prenom} onChange={(e) => set('prenom', e.target.value)} placeholder="Pierre" />
+          </FormField>
+          <FormField label="Nom" required>
+            <input className="input" value={form.nom} onChange={(e) => set('nom', e.target.value)} placeholder="Makaya" />
+          </FormField>
+        </FormGrid>
+        <FormGrid>
+          <FormField label="Email">
+            <input className="input" type="email" value={form.email} onChange={(e) => set('email', e.target.value)} placeholder="prof@ecole.cg" />
+          </FormField>
+          <FormField label="Téléphone">
+            <input className="input" value={form.phone} onChange={(e) => set('phone', e.target.value)} placeholder="06 xxx xx xx" />
+          </FormField>
+        </FormGrid>
+      </FormSection>
+    </FormModal>
   );
 }
 

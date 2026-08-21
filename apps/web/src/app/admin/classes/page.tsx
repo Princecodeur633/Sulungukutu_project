@@ -3,7 +3,8 @@ import { parseGqlError } from '@/lib/errorUtils';
 
 import { useState } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
-import { BookOpen, Plus, Users, Layers, Pencil, Trash2, X, Check } from 'lucide-react';
+import { BookOpen, Plus, Users, Layers, Pencil, Trash2, X } from 'lucide-react';
+import { FormModal, FormField, FormSection, FormGrid, FormActions } from '@/components/ui/FormModal';
 import {
   ASSIGN_CLASS_SUBJECT_MUTATION, CLASSES_BY_SCHOOL_QUERY, CREATE_CLASS_MUTATION,
   CREATE_LEVEL_MUTATION, DELETE_CLASS_MUTATION, LEVELS_BY_SCHOOL_QUERY,
@@ -116,48 +117,42 @@ function ManageClassDrawer({
           </div>
 
           {/* Assigner une matière */}
-          <div className="border-t border-[var(--bd)] pt-5">
-            <h3 className="text-sm font-semibold text-[var(--tx-secondary)] mb-3">Assigner une matière</h3>
-            <div className="space-y-3">
-              <div>
-                <label className="label">Matière</label>
-                <select className="input" value={subjectId} onChange={(e) => setSubjectId(e.target.value)}>
-                  <option value="">Sélectionner...</option>
-                  {subjects.map((s: any) => <option key={s.id} value={s.id}>{s.nom}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="label">Enseignant</label>
-                <select className="input" value={teacherId} onChange={(e) => setTeacherId(e.target.value)}>
-                  <option value="">Sélectionner...</option>
-                  {teachers.map((t: any) => (
-                    <option key={t.id} value={t.id}>
-                      {t.profile?.prenom} {t.profile?.nom}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="label">Coefficient</label>
-                  <input className="input" type="number" min="0.5" max="10" step="0.5"
-                    value={coef} onChange={(e) => setCoef(e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">H/semaine</label>
-                  <input className="input" type="number" min="1" max="20"
-                    value={hpw} onChange={(e) => setHpw(e.target.value)} />
-                </div>
-              </div>
-              <button
-                onClick={handleAssign}
-                disabled={loading || !subjectId || !teacherId}
-                className="btn-primary w-full justify-center"
-              >
-                {loading ? 'Assignation...' : 'Assigner la matière'}
-              </button>
-            </div>
-          </div>
+          <FormSection icon={<Layers size={14} style={{ color: 'var(--accent)' }} />} title="Assigner une matière">
+            <FormField label="Matière" required>
+              <select className="input" value={subjectId} onChange={(e) => setSubjectId(e.target.value)}>
+                <option value="">Sélectionner…</option>
+                {subjects.map((s: any) => <option key={s.id} value={s.id}>{s.nom}</option>)}
+              </select>
+            </FormField>
+            <FormField label="Enseignant" required>
+              <select className="input" value={teacherId} onChange={(e) => setTeacherId(e.target.value)}>
+                <option value="">Sélectionner…</option>
+                {teachers.map((t: any) => (
+                  <option key={t.id} value={t.id}>
+                    {t.profile?.prenom} {t.profile?.nom}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+            <FormGrid>
+              <FormField label="Coefficient">
+                <input className="input" type="number" min="0.5" max="10" step="0.5"
+                  value={coef} onChange={(e) => setCoef(e.target.value)} />
+              </FormField>
+              <FormField label="Heures / semaine">
+                <input className="input" type="number" min="1" max="20"
+                  value={hpw} onChange={(e) => setHpw(e.target.value)} />
+              </FormField>
+            </FormGrid>
+            <button
+              type="button"
+              onClick={handleAssign}
+              disabled={loading || !subjectId || !teacherId}
+              className="btn-primary w-full justify-center"
+            >
+              {loading ? 'Assignation…' : 'Assigner la matière'}
+            </button>
+          </FormSection>
         </div>
       </div>
     </div>
@@ -359,86 +354,95 @@ export default function AdminClassesPage() {
         </div>
       )}
 
-      {/* Modal édition classe */}
       {editClass && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setEditClass(null)} />
-          <div className="relative rounded-2xl shadow-2xl w-full max-w-sm p-6 max-h-[90vh] overflow-y-auto" style={{ background: 'var(--bg-card)' }}>
-            <h2 className="text-lg font-bold text-[var(--tx-primary)] mb-4">Modifier la classe</h2>
-            <div>
-              <label className="label">Nom *</label>
+        <FormModal
+          title="Modifier la classe"
+          subtitle={editClass.level?.nom}
+          icon={<Pencil size={18} style={{ color: 'var(--accent)' }} />}
+          onClose={() => setEditClass(null)}
+          onSubmit={handleUpdateClass}
+          maxWidth={420}
+          footer={
+            <FormActions
+              submitLabel="Enregistrer"
+              loading={updating}
+              onCancel={() => setEditClass(null)}
+              disabled={!editName.trim()}
+            />
+          }
+        >
+          <FormSection icon={<BookOpen size={14} style={{ color: 'var(--accent)' }} />} title="Classe">
+            <FormField label="Nom" required>
               <input className="input" value={editName} onChange={(e) => setEditName(e.target.value)}
-                placeholder="ex: 4ème A" onKeyDown={(e) => e.key === 'Enter' && handleUpdateClass()} autoFocus />
-            </div>
-            <div className="flex justify-end gap-3 mt-5">
-              <button onClick={() => setEditClass(null)} className="btn-secondary">Annuler</button>
-              <button onClick={handleUpdateClass} disabled={updating || !editName.trim()} className="btn-primary">
-                {updating ? 'Enregistrement...' : <><Check size={14} /> Enregistrer</>}
-              </button>
-            </div>
-          </div>
-        </div>
+                placeholder="Ex. 4ème A" autoFocus />
+            </FormField>
+          </FormSection>
+        </FormModal>
       )}
 
-      {/* Modal nouveau niveau */}
       {showNewLevel && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setNewLevel(false)} />
-          <div className="relative rounded-2xl shadow-2xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto" style={{ background: 'var(--bg-card)' }}>
-            <h2 className="text-lg font-bold text-[var(--tx-primary)] mb-5">Créer un niveau</h2>
-            <div className="space-y-3">
-              <div>
-                <label className="label">Nom *</label>
-                <input className="input" placeholder="ex: 6ème, 5ème, CM2, Terminale..."
-                  value={newLevelName} onChange={(e) => setLevelName(e.target.value)} autoFocus />
-              </div>
-              <div>
-                <label className="label">Cycle</label>
-                <select className="input" value={newLevelType} onChange={(e) => setLevelType(e.target.value)}>
-                  <option value="PRIMAIRE">Primaire</option>
-                  <option value="COLLEGE">Collège</option>
-                  <option value="LYCEE">Lycée</option>
-                </select>
-              </div>
-            </div>
-            <div className="flex justify-end gap-3 mt-5">
-              <button onClick={() => setNewLevel(false)} className="btn-secondary">Annuler</button>
-              <button onClick={handleCreateLevel} disabled={creatingLevel || !newLevelName.trim()} className="btn-primary">
-                {creatingLevel ? 'Création...' : 'Créer le niveau'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <FormModal
+          title="Nouveau niveau"
+          subtitle="Ex. 6ème, CM2, Terminale — rattaché à un cycle."
+          icon={<Layers size={18} style={{ color: 'var(--accent)' }} />}
+          onClose={() => setNewLevel(false)}
+          onSubmit={handleCreateLevel}
+          maxWidth={460}
+          footer={
+            <FormActions
+              submitLabel="Créer le niveau"
+              loading={creatingLevel}
+              onCancel={() => setNewLevel(false)}
+              disabled={!newLevelName.trim()}
+            />
+          }
+        >
+          <FormSection icon={<Layers size={14} style={{ color: 'var(--accent)' }} />} title="Niveau">
+            <FormField label="Nom" required>
+              <input className="input" placeholder="Ex. 6ème, CM2, Terminale"
+                value={newLevelName} onChange={(e) => setLevelName(e.target.value)} autoFocus />
+            </FormField>
+            <FormField label="Cycle">
+              <select className="input" value={newLevelType} onChange={(e) => setLevelType(e.target.value)}>
+                <option value="PRIMAIRE">Primaire</option>
+                <option value="COLLEGE">Collège</option>
+                <option value="LYCEE">Lycée</option>
+              </select>
+            </FormField>
+          </FormSection>
+        </FormModal>
       )}
 
-      {/* Modal nouvelle classe */}
       {showNewClass && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setNewClass(false)} />
-          <div className="relative rounded-2xl shadow-2xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto" style={{ background: 'var(--bg-card)' }}>
-            <h2 className="text-lg font-bold text-[var(--tx-primary)] mb-5">Créer une classe</h2>
-            <div className="space-y-3">
-              <div>
-                <label className="label">Niveau *</label>
-                <select className="input" value={newLevelId} onChange={(e) => setNewLevelId(e.target.value)}>
-                  <option value="">Sélectionner un niveau...</option>
-                  {levels.map((l: any) => <option key={l.id} value={l.id}>{l.nom}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="label">Nom *</label>
-                <input className="input" placeholder="ex: 4ème A, CM1, Terminale S..."
-                  value={newClassName} onChange={(e) => setName(e.target.value)} autoFocus />
-              </div>
-            </div>
-            <div className="flex justify-end gap-3 mt-5">
-              <button onClick={() => setNewClass(false)} className="btn-secondary">Annuler</button>
-              <button onClick={handleCreateClass} disabled={creating || !newClassName || !newLevelId} className="btn-primary">
-                {creating ? 'Création...' : 'Créer'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <FormModal
+          title="Nouvelle classe"
+          subtitle={`Année scolaire ${currentAnneeScolaire}`}
+          icon={<BookOpen size={18} style={{ color: 'var(--accent)' }} />}
+          onClose={() => setNewClass(false)}
+          onSubmit={handleCreateClass}
+          maxWidth={460}
+          footer={
+            <FormActions
+              submitLabel="Créer la classe"
+              loading={creating}
+              onCancel={() => setNewClass(false)}
+              disabled={!newClassName || !newLevelId}
+            />
+          }
+        >
+          <FormSection icon={<BookOpen size={14} style={{ color: 'var(--accent)' }} />} title="Classe">
+            <FormField label="Niveau" required>
+              <select className="input" value={newLevelId} onChange={(e) => setNewLevelId(e.target.value)}>
+                <option value="">Sélectionner un niveau…</option>
+                {levels.map((l: any) => <option key={l.id} value={l.id}>{l.nom}</option>)}
+              </select>
+            </FormField>
+            <FormField label="Nom" required>
+              <input className="input" placeholder="Ex. 4ème A, CM1 1"
+                value={newClassName} onChange={(e) => setName(e.target.value)} autoFocus />
+            </FormField>
+          </FormSection>
+        </FormModal>
       )}
 
       {/* Drawer gestion classe */}

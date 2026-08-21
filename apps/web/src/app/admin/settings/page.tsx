@@ -4,7 +4,8 @@ import { useQuery, useMutation, gql } from '@apollo/client';
 import { tokenStorage } from '@/lib/apollo/client';
 import { SchoolColorPicker } from '@/components/ui/SchoolColorPicker';
 import { useToast } from '@/components/ui/Toast';
-import { School, Palette, Save, Building2 } from 'lucide-react';
+import { Palette, Save, Building2 } from 'lucide-react';
+import { FormField, FormGrid } from '@/components/ui/FormModal';
 
 const SCHOOL_SETTINGS_QUERY = gql`
   query SchoolSettings($id: ID!) {
@@ -61,24 +62,20 @@ export default function AdminSettings() {
       <div className="card">
         <div className="section-title"><Building2 size={15} style={{ color: 'var(--tx-muted)' }} />Informations générales</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-            <div>
-              <label className="label">Nom de l'école *</label>
-              <input className="input" value={form.nom} onChange={e => setForm(f => ({ ...f, nom: e.target.value }))} placeholder="Ex: Lycée Victor Hugo" />
-            </div>
-            <div>
-              <label className="label">Année scolaire *</label>
-              <input className="input" value={form.anneeScolaire} onChange={e => setForm(f => ({ ...f, anneeScolaire: e.target.value }))} placeholder="2024-2025" />
-            </div>
-          </div>
-          <div>
-            <label className="label">Adresse</label>
-            <input className="input" value={form.adresse} onChange={e => setForm(f => ({ ...f, adresse: e.target.value }))} placeholder="Adresse complète" />
-          </div>
-          <div>
-            <label className="label">Téléphone</label>
-            <input className="input" value={form.telephone} onChange={e => setForm(f => ({ ...f, telephone: e.target.value }))} placeholder="+242 XX XXX XXXX" />
-          </div>
+          <FormGrid>
+            <FormField label="Nom de l'école" required>
+              <input className="input" value={form.nom} onChange={e => setForm(f => ({ ...f, nom: e.target.value }))} placeholder="Ex. Lycée Victor Hugo" />
+            </FormField>
+            <FormField label="Année scolaire" required>
+              <input className="input" value={form.anneeScolaire} onChange={e => setForm(f => ({ ...f, anneeScolaire: e.target.value }))} placeholder="2025-2026" />
+            </FormField>
+          </FormGrid>
+          <FormField label="Adresse">
+            <input className="input" value={form.adresse} onChange={e => setForm(f => ({ ...f, adresse: e.target.value }))} placeholder="Quartier, ville" />
+          </FormField>
+          <FormField label="Téléphone">
+            <input className="input" value={form.telephone} onChange={e => setForm(f => ({ ...f, telephone: e.target.value }))} placeholder="+242 06 xxx xx xx" />
+          </FormField>
           <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
             <button onClick={handleSave} disabled={loading} className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
               <Save size={14} /> {loading ? 'Sauvegarde…' : 'Enregistrer'}

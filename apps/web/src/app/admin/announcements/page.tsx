@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
 import { tokenStorage } from '@/lib/apollo/client';
 import { Megaphone, Plus, Edit, Trash2, Clock, Users } from 'lucide-react';
+import { FormModal, FormField, FormSection, FormActions, ChoiceChip } from '@/components/ui/FormModal';
 
 const CIBLE_LABELS: Record<string, string> = {
   ALL: 'Tous', PARENTS: 'Parents', TEACHERS: 'Enseignants',
@@ -47,48 +48,43 @@ function AnnouncementModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-[var(--bg-card)] rounded-2xl shadow-2xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
-        <h2 className="text-lg font-bold text-[var(--tx-primary)] mb-5">
-          {isEdit ? 'Modifier l\'annonce' : 'Nouvelle annonce'}
-        </h2>
-        <div className="space-y-4">
-          <div>
-            <label className="label">Titre *</label>
-            <input className="input" value={titre} onChange={(e) => setTitre(e.target.value)}
-              placeholder="Titre de l'annonce..." />
+    <FormModal
+      title={isEdit ? 'Modifier l\'annonce' : 'Nouvelle annonce'}
+      subtitle="Visible immédiatement par les destinataires choisis."
+      icon={<Megaphone size={18} style={{ color: 'var(--accent)' }} />}
+      onClose={onClose}
+      onSubmit={handleSave}
+      maxWidth={560}
+      footer={
+        <FormActions
+          submitLabel={isEdit ? 'Enregistrer' : 'Publier'}
+          loading={lc || lu}
+          onCancel={onClose}
+          disabled={!titre.trim() || !contenu.trim()}
+        />
+      }
+    >
+      <FormSection icon={<Megaphone size={14} style={{ color: 'var(--accent)' }} />} title="Message">
+        <FormField label="Titre" required>
+          <input className="input" autoFocus value={titre} onChange={(e) => setTitre(e.target.value)}
+            placeholder="Objet de l'annonce" />
+        </FormField>
+        <FormField label="Contenu" required>
+          <textarea className="input resize-none" rows={5} value={contenu}
+            onChange={(e) => setContenu(e.target.value)}
+            placeholder="Rédigez votre annonce…" />
+        </FormField>
+        <FormField label="Destinataires">
+          <div className="flex gap-2 flex-wrap">
+            {Object.entries(CIBLE_LABELS).map(([k, v]) => (
+              <ChoiceChip key={k} compact selected={cible === k} onClick={() => setCible(k)}>
+                {v}
+              </ChoiceChip>
+            ))}
           </div>
-          <div>
-            <label className="label">Contenu *</label>
-            <textarea className="input resize-none" rows={5} value={contenu}
-              onChange={(e) => setContenu(e.target.value)}
-              placeholder="Rédigez votre annonce..." />
-          </div>
-          <div>
-            <label className="label">Destinataires</label>
-            <div className="flex gap-2 flex-wrap">
-              {Object.entries(CIBLE_LABELS).map(([k, v]) => (
-                <button
-                  key={k}
-                  onClick={() => setCible(k)}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-semibold border transition-all
-                    ${cible === k ? 'border-[var(--bd-strong)] bg-[var(--info-bg)] text-[var(--tx-primary)]' : 'border-[var(--bd)] text-[var(--tx-secondary)] hover:border-indigo-300'}`}
-                >
-                  {v}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-        <div className="flex justify-end gap-3 mt-5">
-          <button onClick={onClose} className="btn-secondary">Annuler</button>
-          <button onClick={handleSave} disabled={lc || lu} className="btn-primary">
-            {lc || lu ? 'Publication...' : isEdit ? 'Enregistrer' : 'Publier'}
-          </button>
-        </div>
-      </div>
-    </div>
+        </FormField>
+      </FormSection>
+    </FormModal>
   );
 }
 

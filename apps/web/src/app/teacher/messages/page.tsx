@@ -1,98 +1,11 @@
 'use client';
-import { useToast } from '@/components/ui/Toast';
-import { parseGqlError } from '@/lib/errorUtils';
 
 import { useState } from 'react';
 import { useQuery, useMutation, useSubscription } from '@apollo/client';
-import { MARK_MESSAGE_READ_MUTATION, MY_MESSAGES_QUERY, SEARCH_MEMBERS_QUERY, SEND_MESSAGE_MUTATION, MESSAGE_RECEIVED_SUBSCRIPTION } from '@/lib/graphql/queries';
+import { MARK_MESSAGE_READ_MUTATION, MY_MESSAGES_QUERY, SEARCH_MEMBERS_QUERY, MESSAGE_RECEIVED_SUBSCRIPTION } from '@/lib/graphql/queries';
 import { tokenStorage } from '@/lib/apollo/client';
-import { MessageSquare, Send, Search, Plus } from 'lucide-react';
-
-const ROLE_LABELS: Record<string, string> = {
-  ADMIN: 'Admin', TEACHER: 'Enseignant', PARENT: 'Parent', STUDENT: 'Élève',
-};
-
-function ComposeModal({
-  schoolId, members, currentMembershipId, onClose, onSent,
-}: {
-  schoolId: string; members: any[]; currentMembershipId: string;
-  onClose: () => void; onSent: () => void;
-}) {
-  const [receiverId, setReceiver] = useState('');
-  const [sujet, setSujet]         = useState('');
-  const [contenu, setContenu]     = useState('');
-  const [sendMessage, { loading }] = useMutation(SEND_MESSAGE_MUTATION);
-
-  const { addToast } = useToast();
-  const handleSend = async () => {
-    if (!receiverId || !sujet || !contenu) {
-      addToast({ type: 'warning', title: 'Champs manquants', message: 'Destinataire, sujet et contenu sont requis.' });
-      return;
-    }
-    try {
-      await sendMessage({
-        variables: { input: { schoolId, receiverId, sujet, contenu } },
-      });
-      addToast({ type: 'success', title: 'Message envoyé' });
-      onSent(); onClose();
-    } catch(err: any) {
-      addToast({ type: 'error', title: 'Erreur envoi', message: parseGqlError(err) });
-    }
-  };
-
-  const others = members.filter((m) => m.id !== currentMembershipId);
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-[var(--bg-card)] rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        <div className="px-6 py-5 border-b border-[var(--bd)] flex items-center justify-between">
-          <h2 className="text-lg font-bold text-[var(--tx-primary)]">Nouveau message</h2>
-          <button onClick={onClose} className="text-[var(--tx-muted)] hover:text-[var(--tx-secondary)] text-xl">×</button>
-        </div>
-        <div className="p-6 space-y-4">
-          <div>
-            <label className="label">Destinataire *</label>
-            <select className="input" value={receiverId} onChange={(e) => setReceiver(e.target.value)}>
-              <option value="">Sélectionner...</option>
-              {others.map((m: any) => (
-                <option key={m.id} value={m.id}>
-                  {m.profile?.prenom} {m.profile?.nom} — {ROLE_LABELS[m.role] ?? m.role}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="label">Sujet *</label>
-            <input className="input" value={sujet} onChange={(e) => setSujet(e.target.value)}
-              placeholder="Objet du message..." />
-          </div>
-          <div>
-            <label className="label">Message *</label>
-            <textarea
-              className="input resize-none"
-              rows={5}
-              value={contenu}
-              onChange={(e) => setContenu(e.target.value)}
-              placeholder="Écrivez votre message..."
-            />
-          </div>
-        </div>
-        <div className="px-6 py-4 border-t border-[var(--bd)] flex justify-end gap-3">
-          <button onClick={onClose} className="btn-secondary">Annuler</button>
-          <button
-            onClick={handleSend}
-            disabled={loading || !receiverId || !sujet || !contenu}
-            className="btn-primary"
-          >
-            <Send size={15} />
-            {loading ? 'Envoi...' : 'Envoyer'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
+import { MessageSquare, Search, Plus } from 'lucide-react';
+import { ComposeMessageModal } from '@/components/ui/ComposeMessageModal';
 
 export default function MessagesPage() {
   const schoolId = tokenStorage.getSchoolId() ?? '';
@@ -221,7 +134,7 @@ export default function MessagesPage() {
       </div>
 
       {showCompose && (
-        <ComposeModal
+        <ComposeMessageModal
           schoolId={schoolId}
           members={members}
           currentMembershipId=""

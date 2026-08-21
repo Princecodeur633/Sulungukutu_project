@@ -10,8 +10,9 @@ import { useQuery, useMutation } from '@apollo/client';
 import {
   Building2, Users, GraduationCap, BookOpen,
   ChevronLeft, Mail, Phone, MapPin, Edit,
-  UserPlus, Shield
+  UserPlus, Shield, User,
 } from 'lucide-react';
+import { FormModal, FormField, FormSection, FormGrid, FormActions, CredentialsModal } from '@/components/ui/FormModal';
 import Link from 'next/link';
 import { useState } from 'react';
 
@@ -210,76 +211,57 @@ export default function SchoolDetailPage() {
         </div>
       </div>
 
-      {/* Modal ajout admin */}
       {showInvite && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setInvite(false)} />
-          <div className="relative bg-[var(--bg-card)] rounded-2xl shadow-2xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
-            <h2 className="text-lg font-bold text-[var(--tx-primary)] mb-5">Ajouter un administrateur</h2>
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="label">Prénom</label>
-                  <input className="input" value={inviteForm.prenom}
-                    onChange={(e) => setInvite2((f) => ({ ...f, prenom: e.target.value }))} />
-                </div>
-                <div>
-                  <label className="label">Nom</label>
-                  <input className="input" value={inviteForm.nom}
-                    onChange={(e) => setInvite2((f) => ({ ...f, nom: e.target.value }))} />
-                </div>
-              </div>
-              <div>
-                <label className="label">Email</label>
+        <FormModal
+          title="Ajouter un administrateur"
+          subtitle="Un mot de passe temporaire sera généré à la création."
+          icon={<Shield size={18} style={{ color: 'var(--accent)' }} />}
+          onClose={() => setInvite(false)}
+          onSubmit={handleInvite}
+          maxWidth={520}
+          footer={
+            <FormActions
+              hint="Email ou téléphone — au moins l'un des deux."
+              submitLabel="Créer le compte"
+              onCancel={() => setInvite(false)}
+              disabled={!(inviteForm.email || inviteForm.phone) || !inviteForm.nom || !inviteForm.prenom}
+            />
+          }
+        >
+          <FormSection icon={<User size={14} style={{ color: 'var(--accent)' }} />} title="Identité">
+            <FormGrid>
+              <FormField label="Prénom" required>
+                <input className="input" autoFocus value={inviteForm.prenom}
+                  onChange={(e) => setInvite2((f) => ({ ...f, prenom: e.target.value }))} />
+              </FormField>
+              <FormField label="Nom" required>
+                <input className="input" value={inviteForm.nom}
+                  onChange={(e) => setInvite2((f) => ({ ...f, nom: e.target.value }))} />
+              </FormField>
+            </FormGrid>
+            <FormGrid>
+              <FormField label="Email">
                 <input className="input" type="email" value={inviteForm.email}
-                  onChange={(e) => setInvite2((f) => ({ ...f, email: e.target.value }))} />
-              </div>
-              <div>
-                <label className="label">Téléphone</label>
+                  onChange={(e) => setInvite2((f) => ({ ...f, email: e.target.value }))} placeholder="admin@ecole.cg" />
+              </FormField>
+              <FormField label="Téléphone">
                 <input className="input" type="tel" value={inviteForm.phone}
-                  onChange={(e) => setInvite2((f) => ({ ...f, phone: e.target.value }))} />
-                <p style={{ fontSize: 11.5, color: 'var(--tx-muted)', marginTop: 4 }}>
-                  Email ou téléphone requis (au moins l'un des deux).
-                </p>
-              </div>
-            </div>
-            <div className="flex justify-end gap-3 mt-5">
-              <button onClick={() => setInvite(false)} className="btn-secondary">Annuler</button>
-              <button onClick={handleInvite} className="btn-primary">Créer le compte</button>
-            </div>
-          </div>
-        </div>
+                  onChange={(e) => setInvite2((f) => ({ ...f, phone: e.target.value }))} placeholder="06 xxx xx xx" />
+              </FormField>
+            </FormGrid>
+          </FormSection>
+        </FormModal>
       )}
 
-      {/* Identifiants de connexion — auparavant générés puis jamais montrés */}
       {newAdminCreds && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setNewAdminCreds(null)} />
-          <div className="relative bg-[var(--bg-card)] rounded-2xl shadow-2xl w-full max-w-md p-6 text-center max-h-[90vh] overflow-y-auto">
-            <div className="w-16 h-16 rounded-full bg-[var(--ok-bg)] flex items-center justify-center mx-auto mb-4">
-              <Shield size={28} className="text-[var(--ok)]" />
-            </div>
-            <h2 className="text-xl font-bold text-[var(--tx-primary)] mb-2">Administrateur créé</h2>
-            <p className="text-[var(--tx-muted)] text-sm mb-4">
-              Communiquez ces identifiants — l'admin devra changer ce mot de passe à sa première connexion.
-            </p>
-            <div className="bg-[var(--bg-subtle)] rounded-xl p-4 mb-3 text-left">
-              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--tx-muted)] mb-1">Email de connexion</p>
-              <p className="font-mono text-sm font-bold text-[var(--tx-primary)] break-all mb-3">{newAdminCreds.email}</p>
-              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--tx-muted)] mb-1">Mot de passe temporaire</p>
-              <p className="font-mono text-xl font-bold tracking-widest text-[var(--tx-primary)] select-all cursor-text">
-                {newAdminCreds.tempPassword}
-              </p>
-            </div>
-            <button
-              onClick={() => navigator.clipboard?.writeText(`${newAdminCreds.email} / ${newAdminCreds.tempPassword}`)}
-              className="btn-secondary w-full justify-center mb-3 text-sm"
-            >
-              📋 Copier l'email et le mot de passe
-            </button>
-            <button onClick={() => setNewAdminCreds(null)} className="btn-primary w-full justify-center">Fermer</button>
-          </div>
-        </div>
+        <CredentialsModal
+          title="Administrateur créé"
+          identifiant={newAdminCreds.email}
+          identifiantLabel="Identifiant de connexion"
+          password={newAdminCreds.tempPassword}
+          recap={`${newAdminCreds.email} / ${newAdminCreds.tempPassword}`}
+          onClose={() => setNewAdminCreds(null)}
+        />
       )}
     </div>
   );
