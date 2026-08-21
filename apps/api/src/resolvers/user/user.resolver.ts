@@ -391,8 +391,8 @@ export const userResolvers = {
         );
       }
 
-      const memberCode = await identityService.generateUniqueLoginCode(
-        ctx.db, input.role, profile.nom, profile.prenom
+      const memberCode = await identityService.reuseOrGenerateLoginCode(
+        ctx.db, input.role, profile.nom, profile.prenom, profile.code
       );
       const [membership] = await ctx.db
         .insert(schoolMemberships)

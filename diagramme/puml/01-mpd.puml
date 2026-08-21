@@ -1,0 +1,403 @@
+@startuml 01-mpd
+!include _theme.puml
+title "Modèle physique de données (MPD) — sulungukutu\nPostgreSQL 15+ / Drizzle ORM — clés primaires, étrangères et cardinaux"
+
+hide circle
+hide methods
+skinparam linetype ortho
+skinparam classFontSize 11
+skinparam classAttributeFontSize 10
+skinparam wrapWidth 250
+
+together {
+  entity "global_profiles" as gp {
+    * **id** : uuid <<PK>>
+    --
+    * code : varchar(20) <<UK>>
+    * nom : varchar(100)
+    * prenom : varchar(100)
+    * email : varchar(255) <<UK>>
+    * password_hash : varchar(255)
+    phone : varchar(20) <<UK>>
+    avatar_url : text
+    * is_super_admin : boolean
+    password_changed_at : timestamp
+    * created_at : timestamp
+    * updated_at : timestamp
+  }
+
+  entity "schools" as sc {
+    * **id** : uuid <<PK>>
+    --
+    * code : varchar(20) <<UK>>
+    * nom : varchar(200)
+    logo_url : text
+    adresse : text
+    telephone : varchar(20)
+    * annee_scolaire : varchar(10)
+    accent_color : varchar(20)
+    * is_active : boolean
+    * created_at : timestamp
+    * updated_at : timestamp
+  }
+
+  entity "school_memberships" as sm {
+    * **id** : uuid <<PK>>
+    --
+    * profile_id : uuid <<FK>>
+    * school_id : uuid <<FK>>
+    * role : role
+    * code : varchar(20) <<UK>>
+    * status : membership_status
+    * joined_at : timestamp
+    --
+    UK (profile_id, school_id, role)
+  }
+}
+
+package "Referentiel national (Congo-Brazzaville)" as PNat #FFF5F5 {
+  entity "national_levels" as nl {
+    * **id** : uuid <<PK>>
+    --
+    * cycle : level_type
+    * nom : varchar(100)
+    * ordre : integer
+    * created_at : timestamp
+  }
+
+  entity "national_series" as ns {
+    * **id** : uuid <<PK>>
+    --
+    * code : varchar(10) <<UK>>
+    * nom : varchar(150)
+    * created_at : timestamp
+  }
+
+  entity "national_subjects" as nj {
+    * **id** : uuid <<PK>>
+    --
+    * code : varchar(20) <<UK>>
+    * nom : varchar(100)
+    * created_at : timestamp
+  }
+
+  entity "national_curriculum" as nc {
+    * **id** : uuid <<PK>>
+    --
+    * national_level_id : uuid <<FK>>
+    national_series_id : uuid <<FK>>
+    * national_subject_id : uuid <<FK>>
+    * coefficient : numeric(4,2)
+    volume_horaire_hebdo : integer
+    * created_at : timestamp
+  }
+}
+
+package "Structure pedagogique (tenant)" as PPed #F0FFF4 {
+  entity "levels" as lv {
+    * **id** : uuid <<PK>>
+    --
+    * school_id : uuid <<FK>>
+    national_level_id : uuid <<FK>>
+    * nom : varchar(100)
+    * type : level_type
+    * ordre : integer
+    * is_active : boolean
+    deleted_at : timestamp
+    * created_at : timestamp
+  }
+
+  entity "classes" as cl {
+    * **id** : uuid <<PK>>
+    --
+    * school_id : uuid <<FK>>
+    * level_id : uuid <<FK>>
+    national_series_id : uuid <<FK>>
+    * nom : varchar(50)
+    * annee_scolaire : varchar(10)
+    * is_active : boolean
+    deleted_at : timestamp
+    * created_at : timestamp
+  }
+
+  entity "subjects" as su {
+    * **id** : uuid <<PK>>
+    --
+    * school_id : uuid <<FK>>
+    national_subject_id : uuid <<FK>>
+    * nom : varchar(100)
+    description : text
+    * is_active : boolean
+    deleted_at : timestamp
+    * created_at : timestamp
+  }
+
+  entity "class_subjects" as cs {
+    * **id** : uuid <<PK>>
+    --
+    * class_id : uuid <<FK>>
+    * subject_id : uuid <<FK>>
+    * teacher_membership_id : uuid <<FK>>
+    * coefficient : numeric(4,2)
+    hours_per_week : integer
+    * is_active : boolean
+    deleted_at : timestamp
+    * created_at : timestamp
+    --
+    UK (class_id, subject_id)
+  }
+
+  entity "schedules" as sch {
+    * **id** : uuid <<PK>>
+    --
+    * class_subject_id : uuid <<FK>>
+    * jour : integer
+    * heure_debut : varchar(5)
+    * heure_fin : varchar(5)
+    salle : varchar(50)
+    * created_at : timestamp
+  }
+}
+
+package "Scolarite" as PSco #EBF8FF {
+  entity "students" as st {
+    * **id** : uuid <<PK>>
+    --
+    * membership_id : uuid <<FK>>
+    * class_id : uuid <<FK>>
+    * matricule : varchar(20) <<UK>>
+    date_naissance : date
+    sexe : gender
+    * is_active : boolean
+    deleted_at : timestamp
+    * created_at : timestamp
+  }
+
+  entity "parent_students" as ps {
+    * **id** : uuid <<PK>>
+    --
+    * parent_membership_id : uuid <<FK>>
+    * student_id : uuid <<FK>>
+    * lien : parent_link
+    --
+    UK (parent_membership_id, student_id)
+  }
+
+  entity "grades" as gr {
+    * **id** : uuid <<PK>>
+    --
+    * student_id : uuid <<FK>>
+    * class_subject_id : uuid <<FK>>
+    * valeur : numeric(5,2)
+    * type_eval : eval_type
+    * trimestre : trimester
+    * date_saisie : timestamp
+    * enseignant_id : uuid <<FK>>
+    * is_active : boolean
+    deleted_at : timestamp
+  }
+
+  entity "attendances" as at {
+    * **id** : uuid <<PK>>
+    --
+    * student_id : uuid <<FK>>
+    * class_subject_id : uuid <<FK>>
+    * date : date
+    * statut : attendance_status
+    motif : text
+    * marked_by_id : uuid <<FK>>
+    deleted_at : timestamp
+    --
+    UK (student_id, class_subject_id, date)
+  }
+
+  entity "bulletins" as bu {
+    * **id** : uuid <<PK>>
+    --
+    * student_id : uuid <<FK>>
+    * trimestre : trimester
+    * annee_scolaire : varchar(10)
+    * statut : bulletin_status
+    pdf_url : text
+    moyenne_generale : numeric(5,2)
+    rang : integer
+    mention : mention
+    generated_at : timestamp
+    deleted_at : timestamp
+    --
+    UK (student_id, trimestre, annee_scolaire)
+  }
+
+  entity "bulletin_details" as bd {
+    * **id** : uuid <<PK>>
+    --
+    * bulletin_id : uuid <<FK>>
+    * class_subject_id : uuid <<FK>>
+    * moyenne_matiere : numeric(5,2)
+    * coefficient : numeric(4,2)
+    * points_obtenus : numeric(6,2)
+    appreciation : varchar(200)
+  }
+}
+
+package "Paiements" as PPay #FFFAF0 {
+  entity "payments" as pa {
+    * **id** : uuid <<PK>>
+    --
+    * student_id : uuid <<FK>>
+    * mois : integer
+    * annee_scolaire : varchar(10)
+    * statut : payment_status
+    * montant_du : numeric(10,2)
+    * montant_paye : numeric(10,2)
+    date_paiement : timestamp
+    updated_by_id : uuid <<FK>>
+    --
+    UK (student_id, mois, annee_scolaire)
+  }
+
+  entity "payment_transactions" as ptx {
+    * **id** : uuid <<PK>>
+    --
+    * payment_id : uuid <<FK>>
+    * student_id : uuid <<FK>>
+    * montant : numeric(10,2)
+    * devise : varchar(3)
+    * mode : payment_mode
+    * canal : transaction_channel
+    * statut : transaction_status
+    code_echec : transaction_failure_code
+    numero_telephone : varchar(20)
+    numero_recu : varchar(30) <<UK>>
+    * transaction_ref : varchar(64) <<UK>>
+    agent_id : uuid <<FK>>
+    observations : text
+    annule_transaction_id : uuid <<FK>>
+  }
+}
+
+package "Communication et audit" as PCom #FAF5FF {
+  entity "messages" as msg {
+    * **id** : uuid <<PK>>
+    --
+    * school_id : uuid <<FK>>
+    * sender_id : uuid <<FK>>
+    * receiver_id : uuid <<FK>>
+    * sujet : varchar(255)
+    * contenu : text
+    * lu : boolean
+    * created_at : timestamp
+  }
+
+  entity "notifications" as ntf {
+    * **id** : uuid <<PK>>
+    --
+    * profile_id : uuid <<FK>>
+    school_id : uuid <<FK>>
+    * titre : varchar(255)
+    * message : text
+    * type : notification_type
+    * lu : boolean
+    * created_at : timestamp
+  }
+
+  entity "announcements" as ann {
+    * **id** : uuid <<PK>>
+    --
+    * school_id : uuid <<FK>>
+    * auteur_id : uuid <<FK>>
+    * titre : varchar(255)
+    * contenu : text
+    * cible : announcement_target
+    deleted_at : timestamp
+    * created_at : timestamp
+  }
+
+  entity "audit_logs" as aud {
+    * **id** : uuid <<PK>>
+    --
+    * school_id : uuid <<FK>>
+    * actor_id : uuid <<FK>>
+    * action : audit_action
+    * entity_type : varchar(50)
+    * entity_id : uuid
+    old_value : jsonb
+    new_value : jsonb
+    description : text
+    * created_at : timestamp
+  }
+}
+
+' ---- Relations (cardinalites crow's foot) ----
+gp        ||--o{ sm  : "profile_id"
+sc        ||--o{ sm  : "school_id"
+
+sc        ||--o{ lv  : "school_id"
+nl        |o--o{ lv  : "national_level_id"
+lv        ||--o{ cl  : "level_id"
+sc        ||--o{ cl  : "school_id"
+ns        |o--o{ cl  : "national_series_id"
+
+sc        ||--o{ su  : "school_id"
+nj        |o--o{ su  : "national_subject_id"
+
+cl        ||--o{ cs  : "class_id"
+su        ||--o{ cs  : "subject_id"
+sm        ||--o{ cs  : "teacher_membership_id"
+cs        ||--o{ sch : "class_subject_id"
+
+nl        ||--o{ nc  : "national_level_id"
+ns        |o--o{ nc  : "national_series_id"
+nj        ||--o{ nc  : "national_subject_id"
+
+sm        ||--o| st  : "membership_id"
+cl        ||--o{ st  : "class_id"
+sm        ||--o{ ps  : "parent_membership_id"
+st        ||--o{ ps  : "student_id"
+
+st        ||--o{ gr  : "student_id"
+cs        ||--o{ gr  : "class_subject_id"
+sm        ||--o{ gr  : "enseignant_id"
+
+st        ||--o{ at  : "student_id"
+cs        ||--o{ at  : "class_subject_id"
+sm        ||--o{ at  : "marked_by_id"
+
+st        ||--o{ bu  : "student_id"
+bu        ||--o{ bd  : "bulletin_id"
+cs        ||--o{ bd  : "class_subject_id"
+
+st        ||--o{ pa  : "student_id"
+sm        |o--o{ pa  : "updated_by_id"
+pa        ||--o{ ptx : "payment_id"
+st        ||--o{ ptx : "student_id"
+sm        |o--o{ ptx : "agent_id"
+ptx       |o--o| ptx : "annule_transaction_id"
+
+sc        ||--o{ msg : "school_id"
+sm        ||--o{ msg : "sender_id"
+sm        ||--o{ msg : "receiver_id"
+
+gp        ||--o{ ntf : "profile_id"
+sc        |o--o{ ntf : "school_id"
+
+sc        ||--o{ ann : "school_id"
+sm        ||--o{ ann : "auteur_id"
+
+sc        ||--o{ aud : "school_id"
+sm        ||--o{ aud : "actor_id"
+
+legend left
+  **Convention MPD**
+  * colonne obligatoire (NOT NULL)
+  <<PK>> cle primaire (UUID)
+  <<FK>> cle etrangere
+  <<UK>> contrainte UNIQUE
+  ||--o{  un-a-plusieurs (1,n)
+  |o--o{  zero-ou-un vers plusieurs (0,n)
+  ||--o|  un-a-zero-ou-un (1,0..1)
+  Suppression logique : deleted_at (soft delete)
+  Isolation multi-ecole : school_id sur les tables tenant
+endlegend
+
+@enduml

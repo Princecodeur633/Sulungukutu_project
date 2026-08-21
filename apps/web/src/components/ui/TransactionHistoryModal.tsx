@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { History, X, Ban } from 'lucide-react';
 import { useQuery, useMutation } from '@apollo/client';
 import { PAYMENT_TRANSACTION_HISTORY_QUERY, CANCEL_PAYMENT_TRANSACTION_MUTATION } from '@/lib/graphql/queries';
-import { tokenStorage } from '@/lib/apollo/client';
+import { openApiDocument } from '@/lib/api';
 
 const MODE_LABELS: Record<string, string> = {
   ESPECES: 'Espèces', MOBILE_MONEY: 'Mobile Money', MOBILE_MONEY_SIMULE: 'Mobile Money (simulé)',
@@ -99,7 +99,7 @@ export function TransactionHistoryModal({ isOpen, studentId, studentName, anneeS
                     <span className={`px-2 py-0.5 rounded-md text-xs font-semibold ${statutCfg.cls}`}>{statutCfg.label}</span>
                     {tx.recuUrl && (
                       <button
-                        onClick={() => window.open(`${tx.recuUrl}?token=${tokenStorage.get()}`, '_blank')}
+                        onClick={() => openApiDocument(tx.recuUrl)}
                         title="Télécharger le reçu"
                         style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--tx-muted)' }}
                       >↓</button>

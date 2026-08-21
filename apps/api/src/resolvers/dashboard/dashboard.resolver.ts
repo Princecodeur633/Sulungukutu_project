@@ -13,6 +13,19 @@ import type {
   AttendanceData, ParentStudentData, PaymentData,
 } from '../../types/domain';
 
+async function findActiveParentMembership(ctx: GraphQLContext, schoolId: string) {
+  const user = requireSchoolMember(ctx, schoolId);
+  const membership = await ctx.db.query.schoolMemberships.findFirst({
+    where: and(
+      eq(schoolMemberships.profileId, user.profileId),
+      eq(schoolMemberships.schoolId, schoolId),
+      eq(schoolMemberships.role, 'PARENT'),
+      eq(schoolMemberships.status, 'ACTIVE'),
+    ),
+  });
+  return { user, membership };
+}
+
 export const dashboardResolvers = {
   Query: {
     // ── Admin Dashboard ────────────────────────────────────────
@@ -287,26 +300,29 @@ export const dashboardResolvers = {
 
     // ── Parent Dashboard ───────────────────────────────────────
     parentDashboard: async (_: unknown, args: { schoolId: string }, ctx: GraphQLContext) => {
-      const user = requireSchoolMember(ctx, args.schoolId);
-      // NOTE: "2024-2025" était codé en dur ici — un établissement configuré
-      // sur une autre année scolaire (voir Admin > Paramètres) obtenait alors
-      // un résumé des paiements pour la mauvaise année, potentiellement vide.
+      const { user, membership: parentMembership } = await findActiveParentMembership(ctx, args.schoolId);
       const school = await ctx.db.query.schools.findFirst({ where: eq(schools.id, args.schoolId) });
       const anneeScolaire = school?.anneeScolaire ?? '2024-2025';
 
-      const parentLinks = await ctx.db.query.parentStudents.findMany({
-        where: eq(parentStudents.parentMembershipId, user.membershipId!),
-        with: {
-          student: {
+      const parentLinks = parentMembership
+        ? await ctx.db.query.parentStudents.findMany({
+            where: eq(parentStudents.parentMembershipId, parentMembership.id),
             with: {
-              membership: { with: { profile: true } },
-              class: true,
-              grades: true,
-              attendances: true,
+              student: {
+                with: {
+                  membership: { with: { profile: true } },
+                  class: { with: { level: true } },
+                  grades: {
+                    with: { classSubject: { with: { subject: true } } },
+                  },
+                  attendances: {
+                    with: { classSubject: { with: { subject: true } } },
+                  },
+                },
+              },
             },
-          },
-        },
-      });
+          })
+        : [];
 
       const children = (await Promise.all(
         parentLinks.map(async (link: ParentStudentData) => {
@@ -441,10 +457,11 @@ export const dashboardResolvers = {
 
     // ── Parent — mes enfants ───────────────────────────────────
     myChildren: async (_: unknown, args: { schoolId: string }, ctx: GraphQLContext) => {
-      const user = requireSchoolMember(ctx, args.schoolId);
+      const { membership: parentMembership } = await findActiveParentMembership(ctx, args.schoolId);
+      if (!parentMembership) return [];
       const links = await ctx.db.query.parentStudents.findMany({
-        where: eq(parentStudents.parentMembershipId, user.membershipId!),
-        with:  { student: { with: { membership: { with: { profile: true } }, class: true } } },
+        where: eq(parentStudents.parentMembershipId, parentMembership.id),
+        with:  { student: { with: { membership: { with: { profile: true } }, class: { with: { level: true } } } } },
       });
       return links.map((l: ParentStudentData) => l.student);
     },

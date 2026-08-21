@@ -1,0 +1,145 @@
+@startuml 16-cas-utilisation
+!include _theme.puml
+title "Identification des cas d'utilisation — sulungukutu\nUML 2 : silhouettes d'acteurs, packages, include / extend"
+
+left to right direction
+skinparam actorsStereotype false
+skinparam wrapWidth 160
+skinparam packageStyle rectangle
+
+actor "Super-administrateur" as SA
+actor "Administrateur" as Admin
+actor "Enseignant" as Ens
+actor "Parent" as Parent
+actor "Eleve" as Eleve
+actor "Serveur SMTP" as SMTP <<systeme externe>>
+actor "Passerelle\nMobile Money" as MM <<systeme externe>>
+
+SA --|> Admin
+
+rectangle "sulungukutu — plateforme de gestion scolaire" {
+  package "Authentification" {
+    usecase "Se connecter" as UC_Login
+    usecase "Changer de mot de passe" as UC_Pwd
+    usecase "Reinitialiser le mot de passe" as UC_Reset
+    usecase "Changer d etablissement" as UC_WS
+  }
+
+  package "Administration plateforme" {
+    usecase "Gerer les etablissements" as UC_Schools
+    usecase "Consulter le tableau de bord consolide" as UC_SADash
+    usecase "Gerer les profils globaux" as UC_Profiles
+  }
+
+  package "Administration etablissement" {
+    usecase "Parametrer l etablissement" as UC_School
+    usecase "Gerer niveaux, classes et matieres" as UC_Pedago
+    usecase "Affecter un enseignant a une matiere" as UC_Assign
+    usecase "Inscrire un eleve" as UC_Stu
+    usecase "Inviter un utilisateur" as UC_Inv
+    usecase "Lier un parent a un eleve" as UC_Link
+    usecase "Gerer l emploi du temps" as UC_EDT
+    usecase "Consulter le journal d audit" as UC_Audit
+    usecase "Exporter les donnees (Excel)" as UC_Exp
+  }
+
+  package "Pedagogie" {
+    usecase "Saisir les notes" as UC_Notes
+    usecase "Marquer les presences" as UC_Abs
+    usecase "Notifier une absence" as UC_NotifAbs
+    usecase "Generer les bulletins" as UC_Gen
+    usecase "Publier un bulletin" as UC_Pub
+    usecase "Telecharger un bulletin" as UC_Dl
+    usecase "Calculer moyennes et rangs" as UC_Calc
+    usecase "Controler le solde du trimestre" as UC_Solde
+  }
+
+  package "Finances" {
+    usecase "Encaisser au guichet" as UC_Guichet
+    usecase "Payer a distance" as UC_Dist
+    usecase "Annuler une transaction" as UC_Cancel
+    usecase "Exonerer une mensualite" as UC_Exo
+    usecase "Consulter l historique des paiements" as UC_Hist
+  }
+
+  package "Communication" {
+    usecase "Echanger des messages" as UC_Msg
+    usecase "Publier une annonce" as UC_Ann
+    usecase "Consulter les notifications" as UC_Notif
+  }
+
+  package "Consultation" {
+    usecase "Consulter le suivi scolaire" as UC_Suivi
+    usecase "Consulter le tableau de bord" as UC_Dash
+  }
+}
+
+SA --> UC_Schools
+SA --> UC_SADash
+SA --> UC_Profiles
+
+Admin --> UC_Login
+Admin --> UC_School
+Admin --> UC_Pedago
+Admin --> UC_Assign
+Admin --> UC_Stu
+Admin --> UC_Inv
+Admin --> UC_Link
+Admin --> UC_EDT
+Admin --> UC_Audit
+Admin --> UC_Exp
+Admin --> UC_Notes
+Admin --> UC_Abs
+Admin --> UC_Gen
+Admin --> UC_Pub
+Admin --> UC_Guichet
+Admin --> UC_Cancel
+Admin --> UC_Exo
+Admin --> UC_Ann
+Admin --> UC_Dash
+
+Ens --> UC_Login
+Ens --> UC_Notes
+Ens --> UC_Abs
+Ens --> UC_EDT
+Ens --> UC_Msg
+Ens --> UC_Dash
+
+Parent --> UC_Login
+Parent --> UC_Suivi
+Parent --> UC_Dl
+Parent --> UC_Dist
+Parent --> UC_Hist
+Parent --> UC_Msg
+Parent --> UC_Notif
+
+Eleve --> UC_Login
+Eleve --> UC_Suivi
+Eleve --> UC_Dl
+Eleve --> UC_Msg
+Eleve --> UC_Notif
+
+UC_Gen ..> UC_Calc : <<include>>
+UC_Dl ..> UC_Solde : <<include>>
+UC_Pub ..> UC_Notif : <<include>>
+UC_NotifAbs .> UC_Abs : <<extend>>
+
+SMTP --> UC_Reset
+SMTP --> UC_Inv
+SMTP --> UC_Abs
+MM --> UC_Dist
+
+legend left
+  **Identification (resume)**
+  | Acteur | Cas d utilisation principaux |
+  | Super-admin | Ecoles, profils, KPI globaux |
+  | Administrateur | Pedagogie, eleves, bulletins, caisse, audit |
+  | Enseignant | Notes, presences, EDT, messagerie |
+  | Parent | Suivi, paiement distant, bulletin |
+  | Eleve | Notes, bulletin, presences |
+  Generalisation Super-admin -> Admin : le super-admin herite des droits admin.
+  <<include>> : comportement obligatoire.
+  <<extend>> : comportement optionnel (ex. notification si ABSENT).
+endlegend
+
+@enduml

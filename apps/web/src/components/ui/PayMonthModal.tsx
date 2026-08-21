@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Smartphone, X, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 import { useMutation } from '@apollo/client';
 import { INITIATE_REMOTE_PAYMENT_MUTATION } from '@/lib/graphql/queries';
+import { openApiDocument } from '@/lib/api';
 
 const MOIS_LABELS: Record<number, string> = {
   1: 'Septembre', 2: 'Octobre', 3: 'Novembre', 4: 'Décembre',
@@ -28,7 +29,7 @@ interface Props {
 
 export function PayMonthModal({ isOpen, studentId, mois, anneeScolaire, montantDu, onClose, onSuccess }: Props) {
   const [numeroTelephone, setNumero] = useState('');
-  const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [result, setResult] = useState<{ ok: boolean; message: string; recuUrl?: string | null } | null>(null);
   const [initiateRemotePayment, { loading }] = useMutation(INITIATE_REMOTE_PAYMENT_MUTATION);
 
   if (!isOpen) return null;
@@ -45,8 +46,13 @@ export function PayMonthModal({ isOpen, studentId, mois, anneeScolaire, montantD
         },
       });
       const tx = data?.initiateRemotePayment?.transaction;
+      const payment = data?.initiateRemotePayment?.payment;
       if (tx?.statut === 'VALIDEE') {
-        setResult({ ok: true, message: `Paiement confirmé — reçu n° ${tx.numeroRecu ?? tx.transactionRef}` });
+        setResult({
+          ok: true,
+          message: `Paiement confirmé — reçu n° ${tx.numeroRecu ?? tx.transactionRef}`,
+          recuUrl: payment?.recuUrl ?? tx?.recuUrl,
+        });
         onSuccess();
       } else {
         const reason = tx?.codeEchec ? FAILURE_MESSAGES[tx.codeEchec] : null;
@@ -74,6 +80,8 @@ export function PayMonthModal({ isOpen, studentId, mois, anneeScolaire, montantD
               </h3>
               <p style={{ fontSize: 13, color: 'var(--tx-muted)', lineHeight: 1.5 }}>
                 Simulation de paiement à distance. Montant dû : <strong>{montantDu.toLocaleString('fr-FR')} XAF</strong>
+                <br />
+                Saisissez un numéro à 8 chiffres ou plus (ex. 06 123 45 67). Évitez les suffixes 0000, 1111 et 9999 (cas de test d&apos;échec).
               </p>
             </div>
             <button onClick={handleClose} style={{
@@ -131,6 +139,11 @@ export function PayMonthModal({ isOpen, studentId, mois, anneeScolaire, montantD
               <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                 {!result.ok && (
                   <button className="btn-secondary" onClick={() => setResult(null)}>Réessayer</button>
+                )}
+                {result.ok && result.recuUrl && (
+                  <button className="btn-secondary" onClick={() => openApiDocument(result.recuUrl)}>
+                    Voir le reçu
+                  </button>
                 )}
                 <button
                   onClick={handleClose}

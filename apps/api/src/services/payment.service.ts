@@ -129,9 +129,34 @@ export const paymentService = {
       orderBy: (p, { asc }) => [asc(p.mois)],
     });
 
+    const existingMois = new Set(allPayments.map((p) => p.mois));
+    const missingMois = [1, 2, 3, 4, 5, 6, 7, 8, 9].filter((m) => !existingMois.has(m));
+    if (missingMois.length > 0) {
+      await db.insert(payments).values(
+        missingMois.map((mois) => ({
+          studentId,
+          mois,
+          anneeScolaire,
+          statut:      'IMPAYE' as const,
+          montantDu:   DEFAULT_MONTANT_MENSUALITE.toFixed(2),
+          montantPaye: '0',
+        }))
+      ).onConflictDoNothing();
+    }
+
+    const moisDetails = missingMois.length === 0
+      ? allPayments
+      : await db.query.payments.findMany({
+          where: and(
+            eq(payments.studentId, studentId),
+            eq(payments.anneeScolaire, anneeScolaire)
+          ),
+          orderBy: (p, { asc }) => [asc(p.mois)],
+        });
+
     const isUnlocked = async (t: 'T1' | 'T2' | 'T3') => {
       const mois = TRIMESTER_MONTHS[t];
-      const tPayments = allPayments.filter((p) => mois.includes(p.mois));
+      const tPayments = moisDetails.filter((p) => mois.includes(p.mois));
       return (
         tPayments.length === mois.length &&
         tPayments.every((p) => p.statut === 'PAYE' || p.statut === 'EXONERE')
@@ -146,13 +171,16 @@ export const paymentService = {
 
     return {
       studentId,
+      // GraphQL PaymentSummary.student est non-null : sans cet objet la requête
+      // paymentsByStudent échoue entièrement (liste vide côté parent, montant 0).
+      student: { id: studentId },
       anneeScolaire,
-      moisDetails:  allPayments,
+      moisDetails,
       t1Unlocked,
       t2Unlocked,
       t3Unlocked,
-      totalPaid:    allPayments.filter((p) => p.statut === 'PAYE' || p.statut === 'EXONERE').length,
-      totalUnpaid:  allPayments.filter((p) => p.statut === 'IMPAYE' || p.statut === 'PARTIEL').length,
+      totalPaid:    moisDetails.filter((p) => p.statut === 'PAYE' || p.statut === 'EXONERE').length,
+      totalUnpaid:  moisDetails.filter((p) => p.statut === 'IMPAYE' || p.statut === 'PARTIEL').length,
     };
   },
 

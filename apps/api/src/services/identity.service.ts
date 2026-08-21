@@ -57,6 +57,27 @@ export const identityService = {
   },
 
   /**
+   * Réutilise un code déjà attribué au profil s'il n'est pas pris
+   * comme identifiant de membership — évite d'avoir deux codes
+   * différents (profil vs membership) pour la même personne.
+   */
+  reuseOrGenerateLoginCode: async (
+    db: DB,
+    role: 'SUPER_ADMIN' | 'ADMIN' | 'TEACHER' | 'PARENT' | 'STUDENT',
+    nom: string,
+    prenom: string,
+    preferredCode?: string | null
+  ): Promise<string> => {
+    if (preferredCode) {
+      const conflict = await db.query.schoolMemberships.findFirst({
+        where: eq(schoolMemberships.code, preferredCode),
+      });
+      if (!conflict) return preferredCode;
+    }
+    return identityService.generateUniqueLoginCode(db, role, nom, prenom);
+  },
+
+  /**
    * Génère un email interne normalisé et garanti unique, au format
    * prenom.nom@{codeEcole}.sulungukutu.local. En cas de conflit (même
    * prénom+nom dans la même école), ajoute un suffixe numérique croissant :

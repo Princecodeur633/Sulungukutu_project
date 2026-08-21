@@ -1,0 +1,57 @@
+'============================================================
+' Theme commun — sulungukutu (memoire, notation UML 2)
+'============================================================
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontName Segoe UI
+skinparam defaultFontSize 13
+skinparam dpi 160
+skinparam wrapWidth 200
+skinparam maxMessageSize 180
+skinparam nodesep 35
+skinparam ranksep 40
+skinparam ArrowColor #1A365D
+skinparam BorderColor #2C5282
+skinparam ArrowThickness 1.2
+skinparam roundCorner 8
+skinparam noteBackgroundColor #FFFFF0
+skinparam noteBorderColor #D69E2E
+skinparam stereotypeFontSize 11
+skinparam packageBackgroundColor #F7FAFC
+skinparam packageBorderColor #4A5568
+skinparam rectangleBackgroundColor #EDF2F7
+skinparam actorBackgroundColor #FFFFFF
+skinparam actorBorderColor #1A365D
+skinparam actorFontStyle bold
+skinparam usecaseBackgroundColor #E6FFFA
+skinparam usecaseBorderColor #2C7A7B
+skinparam classBackgroundColor #EBF8FF
+skinparam classBorderColor #2B6CB0
+skinparam classHeaderBackgroundColor #BEE3F8
+skinparam classAttributeIconSize 0
+skinparam entityBackgroundColor #FFFAF0
+skinparam entityBorderColor #C05621
+skinparam componentBackgroundColor #F0FFF4
+skinparam componentBorderColor #276749
+skinparam interfaceBackgroundColor #FFFFFF
+skinparam interfaceBorderColor #2B6CB0
+skinparam databaseBackgroundColor #EBF8FF
+skinparam databaseBorderColor #2B6CB0
+skinparam nodeBackgroundColor #F7FAFC
+skinparam nodeBorderColor #2D3748
+skinparam artifactBackgroundColor #EDF2F7
+skinparam artifactBorderColor #4A5568
+skinparam activityBackgroundColor #EBF8FF
+skinparam activityBorderColor #2B6CB0
+skinparam activityDiamondBackgroundColor #FED7D7
+skinparam activityDiamondBorderColor #C53030
+skinparam sequenceParticipantBackgroundColor #EBF8FF
+skinparam sequenceParticipantBorderColor #2B6CB0
+skinparam sequenceLifeLineBorderColor #4A5568
+skinparam sequenceGroupBackgroundColor #FFFAF0
+skinparam sequenceGroupBorderColor #C05621
+skinparam partitionBackgroundColor #F7FAFC
+skinparam titleFontSize 18
+skinparam titleFontStyle bold
+skinparam titleFontColor #1A365D

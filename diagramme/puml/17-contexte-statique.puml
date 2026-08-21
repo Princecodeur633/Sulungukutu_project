@@ -1,0 +1,59 @@
+@startuml 17-contexte-statique
+!include _theme.puml
+title "Diagramme de contexte statique — sulungukutu\nSystème vu comme boîte noire et flux avec les acteurs externes"
+
+skinparam nodesep 70
+skinparam ranksep 70
+skinparam wrapWidth 180
+
+actor "Super-administrateur" as SA
+actor "Administrateur\nd etablissement" as Admin
+actor "Enseignant" as Ens
+actor "Parent" as Parent
+actor "Eleve" as Eleve
+
+rectangle "sulungukutu\nPlateforme numerique de gestion scolaire\n(multi-etablissement, Congo-Brazzaville)" as SYS #E2E8F0
+
+actor "Serveur SMTP\n(Resend / Gmail)" as SMTP <<systeme externe>>
+actor "Passerelle Mobile Money\n(simulation)" as MM <<systeme externe>>
+actor "PostgreSQL Neon" as DB <<systeme externe>>
+
+SA -down-> SYS : "creer / desactiver ecoles\ngerer profils globaux"
+SYS -up-> SA : "KPI consolides\nliste des etablissements"
+
+Admin -right-> SYS : "pedagogie, inscriptions,\nbulletins, caisse, annonces"
+SYS -left-> Admin : "tableaux de bord, audits,\nexports Excel / PDF"
+
+Ens -right-> SYS : "notes, presences, EDT,\nmessagerie"
+SYS -left-> Ens : "classes assignees,\nstatistiques de presence"
+
+Parent -up-> SYS : "paiement a distance,\nmessagerie, suivi"
+SYS -down-> Parent : "resultats, bulletins,\nrecus, notifications"
+
+Eleve -up-> SYS : "consultation, messagerie"
+SYS -down-> Eleve : "notes, bulletin, emploi du temps"
+
+SYS -right-> SMTP : "invitations, reset MDP,\nrappels de paiement, absences"
+SMTP -left-> SYS : "accuse d envoi"
+
+SYS -right-> MM : "initier paiement (EN_ATTENTE)"
+MM -left-> SYS : "succes / code d echec"
+
+SYS -down-> DB : "persistance SQL (TLS)"
+DB -up-> SYS : "donnees metier (24 tables)"
+
+note bottom of SYS
+  **Frontiere du systeme**
+  Web Next.js (Vercel) + API GraphQL (Railway).
+  Isolation tenant : chaque mutation verifie
+  l appartenance a l ecole (schoolId du JWT
+  jamais pris tel quel depuis le client).
+end note
+
+legend left
+  Diagramme de **contexte statique** : le systeme est une unique boite.
+  Les fleches portent les **flux d information** echanges avec
+  les acteurs humains et les systemes externes.
+endlegend
+
+@enduml

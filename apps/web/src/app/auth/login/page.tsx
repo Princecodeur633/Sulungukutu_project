@@ -173,11 +173,11 @@ function LoginPageInner() {
               <div style={{ position: 'relative' }}>
                 <User size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--tx-muted)', pointerEvents: 'none' }} />
                 <input type="text" name="identifiant" value={identifiant} onChange={e => setIdentifiant(e.target.value)}
-                  placeholder="votre@email.com, STU-A1B2 ou 06 XXX XX XX" required autoComplete="username"
+                  placeholder="votre@email.com, STU-A1B2, matricule ou 06 XXX XX XX" required autoComplete="username"
                   className="input" style={{ paddingLeft: 36 }} />
               </div>
               <p style={{ fontSize: 11.5, color: 'var(--tx-muted)', marginTop: 5 }}>
-                Pas d'email ? Utilisez l'identifiant remis lors de votre inscription (ex: STU-A1B2), ou votre numéro de téléphone.
+                Pas d'email ? Utilisez l'identifiant (ex: STU-A1B2), le matricule, ou votre numéro de téléphone.
               </p>
             </div>
 

@@ -1,0 +1,46 @@
+@startuml 12-ssd-gestion-paiements
+!include _theme.puml
+!pragma teoz true
+title "Diagramme de séquence système — gestion des paiements"
+
+autonumber
+actor "Administrateur" as Admin
+actor "Parent" as Parent
+participant ":sulungukutu" as Sys
+participant ":PasserelleMobileMoney" as MM <<externe>>
+
+== Encaissement guichet ==
+Admin -> Sys : recordManualPayment(eleve, mois, montant, mode)
+activate Sys
+Sys --> Admin : PaymentOperationResult(transaction VALIDEE, mensualite)
+Sys -> Parent : notifier(PAIEMENT)
+deactivate Sys
+
+== Paiement a distance ==
+Parent -> Sys : initiateRemotePayment(eleve, mois, montant, telephone)
+activate Sys
+Sys -> MM : initier(transactionRef, montant, telephone)
+activate MM
+alt succes
+  MM --> Sys : succes
+  Sys --> Parent : transaction VALIDEE + mensualite recalee
+else echec
+  MM --> Sys : codeEchec
+  Sys --> Parent : transaction ECHOUEE
+end
+deactivate MM
+deactivate Sys
+
+== Annulation (compensation) ==
+Admin -> Sys : cancelPaymentTransaction(transactionId, motif)
+activate Sys
+Sys --> Admin : reversal ANNULEE + mensualite recalee
+deactivate Sys
+
+== Exoneration administrative ==
+Admin -> Sys : updatePaymentStatus(eleve, mois, EXONERE)
+activate Sys
+Sys --> Admin : mensualite EXONERE
+deactivate Sys
+
+@enduml

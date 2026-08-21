@@ -1,0 +1,76 @@
+@startuml 02-deploiement
+!include _theme.puml
+title "Diagramme de déploiement — sulungukutu\nUML 2 : nœuds, artefacts et chemins de communication"
+
+skinparam nodesep 50
+skinparam ranksep 55
+
+actor "Utilisateur\n(Admin, Enseignant,\nParent, Eleve, Super-admin)" as User
+
+node "Poste client" as Client <<device>> {
+  artifact "Navigateur web\n(Chrome / Firefox / Edge)" as Browser
+  artifact "PWA Next.js\n(manifest.json, service worker)" as PWA
+}
+
+node "Vercel — Edge / CDN" as Vercel <<execution environment>> {
+  artifact "apps/web\nNext.js 14 App Router" as Web
+  artifact "middleware.ts\nJWT + controle de roles" as MW
+  artifact "Apollo Client 3\nHTTP + graphql-ws" as Apollo
+}
+
+node "Railway — Conteneur Node.js 20" as Railway <<execution environment>> {
+  artifact "apps/api\ngraphql-yoga 5" as API
+  artifact "WebSocket graphql-ws\n/graphql" as WS
+  artifact "Routes HTTP\n/pdf /export /import /health" as HTTP
+  artifact "node-cron\nrappels de paiement" as Cron
+  artifact "Drizzle ORM" as Drizzle
+}
+
+database "Neon PostgreSQL" as Neon <<database>> {
+  artifact "Schema sulungukutu\n24 tables + enums" as Schema
+}
+
+cloud "Services externes" as Ext {
+  artifact "SMTP\nResend / Gmail\n(Nodemailer)" as SMTP
+  artifact "Passerelle Mobile Money\n(simulation applicative)" as MM
+}
+
+User --> Browser : "HTTPS"
+Browser --> Web : "<<HTTPS>>\nHTML / CSS / JS"
+Web --> MW : "requete authentifiee"
+MW --> Apollo : "session valide"
+Apollo --> API : "<<HTTPS>>\nPOST /graphql"
+Apollo --> WS : "<<WSS>>\nsubscriptions"
+Web --> HTTP : "<<HTTPS>>\nPDF, Excel, import"
+API --> Drizzle
+HTTP --> Drizzle
+Cron --> Drizzle
+Drizzle --> Schema : "<<TLS>>\npostgresql://\nsslmode=require"
+API --> SMTP : "<<SMTPS>>\nport 465"
+API --> MM : "initiation / resolution\n(transaction EN_ATTENTE)"
+Cron --> SMTP : "rappels mensualites"
+
+note right of Railway
+  **Variables cles**
+  DATABASE_URL, JWT_SECRET,
+  REFRESH_TOKEN_SECRET,
+  FRONTEND_URL, SMTP_*
+  Healthcheck : GET /health
+  Restart : ON_FAILURE (3 essais)
+end note
+
+note bottom of Vercel
+  **Variables cles**
+  NEXT_PUBLIC_API_URL
+  NEXT_PUBLIC_WS_URL
+end note
+
+legend left
+  **Stereotypes UML**
+  <<device>> materiel
+  <<execution environment>> runtime
+  <<database>> SGBD
+  Les artefacts sont les unites deploiement (WAR/JAR equivalents Node)
+endlegend
+
+@enduml

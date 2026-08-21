@@ -1,7 +1,7 @@
 import { GraphQLContext } from './auth';
 import { GraphQLError } from 'graphql';
 import { eq, and } from 'drizzle-orm';
-import { students, parentStudents } from '../db/schema';
+import { students, parentStudents, schoolMemberships } from '../db/schema';
 
 type AllowedRole = 'SUPER_ADMIN' | 'ADMIN' | 'TEACHER' | 'PARENT' | 'STUDENT';
 
@@ -57,6 +57,23 @@ export function requireSchoolMember(ctx: GraphQLContext, schoolId: string) {
   return user;
 }
 
+/** Membership actif du rôle demandé pour ce profil dans cette école (indépendant du JWT). */
+export async function findActiveMembershipByRole(
+  ctx: GraphQLContext,
+  schoolId: string,
+  role: 'PARENT' | 'STUDENT' | 'TEACHER' | 'ADMIN'
+) {
+  const user = requireAuth(ctx);
+  return ctx.db.query.schoolMemberships.findFirst({
+    where: and(
+      eq(schoolMemberships.profileId, user.profileId),
+      eq(schoolMemberships.schoolId, schoolId),
+      eq(schoolMemberships.role, role),
+      eq(schoolMemberships.status, 'ACTIVE'),
+    ),
+  });
+}
+
 export function requireSchoolAdmin(ctx: GraphQLContext, schoolId: string) {
   const user = requireSchoolMember(ctx, schoolId);
   if (user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN') {
@@ -92,18 +109,26 @@ export async function requireStudentAccess(
   if (user.role === 'STUDENT') {
     const student = await ctx.db.query.students.findFirst({ where: eq(students.id, studentId) });
     if (student && student.membershipId === user.membershipId) return user;
+    const studentMembership = await findActiveMembershipByRole(ctx, schoolId, 'STUDENT');
+    if (student && studentMembership && student.membershipId === studentMembership.id) return user;
     throw new GraphQLError('Accès refusé : vous ne pouvez consulter que vos propres informations.', {
       extensions: { code: 'FORBIDDEN' },
     });
   }
 
   if (user.role === 'PARENT') {
-    const link = await ctx.db.query.parentStudents.findFirst({
-      where: and(
-        eq(parentStudents.parentMembershipId, user.membershipId!),
-        eq(parentStudents.studentId, studentId)
-      ),
-    });
+    // Le JWT peut porter un autre membership (ex. enseignant) du même profil.
+    // Les rattachements parent↔élève sont sur le membership PARENT de l'école.
+    const parentMembership = await findActiveMembershipByRole(ctx, schoolId, 'PARENT');
+    const parentMembershipId = parentMembership?.id ?? user.membershipId;
+    const link = parentMembershipId
+      ? await ctx.db.query.parentStudents.findFirst({
+          where: and(
+            eq(parentStudents.parentMembershipId, parentMembershipId),
+            eq(parentStudents.studentId, studentId)
+          ),
+        })
+      : undefined;
     if (link) return user;
     throw new GraphQLError("Accès refusé : cet élève n'est pas rattaché à votre compte parent.", {
       extensions: { code: 'FORBIDDEN' },

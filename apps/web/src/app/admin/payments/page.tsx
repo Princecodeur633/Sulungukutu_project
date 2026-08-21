@@ -12,6 +12,7 @@ import {
   MY_SCHOOL_QUERY,
 } from '@/lib/graphql/queries';
 import { tokenStorage } from '@/lib/apollo/client';
+import { openApiDocument } from '@/lib/api';
 import { useActionToast } from '@/hooks/useActionToast';
 import { useToast } from '@/components/ui/Toast';
 import { RecordPaymentModal } from '@/components/ui/RecordPaymentModal';
@@ -141,7 +142,7 @@ function PaymentRow({
             )}
             {p?.recuUrl && (
               <button
-                onClick={() => window.open(`${p.recuUrl}?token=${tokenStorage.get()}`, '_blank')}
+                onClick={() => openApiDocument(p.recuUrl)}
                 title="Télécharger le reçu"
                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--tx-muted)', padding: 2 }}
               >

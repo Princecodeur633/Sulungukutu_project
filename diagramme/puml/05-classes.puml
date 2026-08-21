@@ -1,0 +1,306 @@
+@startuml 05-classes
+!include _theme.puml
+title "Diagramme de classes du système — sulungukutu\nUML 2 : associations, agrégations (losange vide) et compositions (losange plein)"
+
+skinparam classFontSize 12
+skinparam classAttributeFontSize 11
+skinparam wrapWidth 180
+hide empty methods
+hide circle
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  TEACHER
+  PARENT
+  STUDENT
+}
+
+enum StatutPaiement {
+  IMPAYE
+  PARTIEL
+  PAYE
+  ANNULE
+  EXONERE
+}
+
+enum StatutBulletin {
+  BROUILLON
+  PUBLIE
+  ARCHIVE
+}
+
+enum TypeEval {
+  DEVOIR
+  CONTROLE
+  EXAMEN
+  INTERRO
+}
+
+package "Identite et multi-tenant" as PId {
+  class ProfilGlobal {
+    - id : UUID
+    - code : String
+    - nom : String
+    - prenom : String
+    - email : String
+    - telephone : String
+    - hashMotDePasse : String
+    - estSuperAdmin : Boolean
+    - passwordChangedAt : DateTime
+    + authentifier() : AuthPayload
+    + changerMotDePasse()
+  }
+
+  class Etablissement {
+    - id : UUID
+    - code : String
+    - nom : String
+    - anneeScolaire : String
+    - couleurAccent : String
+    - estActif : Boolean
+    + provisionnerPedagogie()
+  }
+
+  class AdhesionEcole {
+    - id : UUID
+    - code : String
+    - role : Role
+    - statut : StatutAdhesion
+    - dateAdhesion : DateTime
+  }
+}
+
+package "Referentiel national" as PNat {
+  class NiveauNational {
+    - id : UUID
+    - cycle : TypeCycle
+    - nom : String
+    - ordre : Integer
+  }
+
+  class SerieNationale {
+    - id : UUID
+    - code : String
+    - nom : String
+  }
+
+  class MatiereNationale {
+    - id : UUID
+    - code : String
+    - nom : String
+  }
+
+  class GrilleCurriculum {
+    - coefficient : Decimal
+    - volumeHoraireHebdo : Integer
+  }
+}
+
+package "Pedagogie etablissement" as PPed {
+  class Niveau {
+    - id : UUID
+    - nom : String
+    - type : TypeCycle
+    - ordre : Integer
+    - estActif : Boolean
+  }
+
+  class Classe {
+    - id : UUID
+    - nom : String
+    - anneeScolaire : String
+    - estActif : Boolean
+  }
+
+  class Matiere {
+    - id : UUID
+    - nom : String
+    - description : String
+    - estActif : Boolean
+  }
+
+  class AffectationPedagogique {
+    - id : UUID
+    - coefficient : Decimal
+    - heuresParSemaine : Integer
+    - estActif : Boolean
+  }
+
+  class Creneau {
+    - jour : Integer
+    - heureDebut : String
+    - heureFin : String
+    - salle : String
+  }
+}
+
+package "Scolarite" as PSco {
+  class Eleve {
+    - id : UUID
+    - matricule : String
+    - dateNaissance : Date
+    - sexe : Genre
+    - estActif : Boolean
+  }
+
+  class LienParental {
+    - lien : Pere | Mere | Tuteur
+  }
+
+  class Note {
+    - valeur : Decimal
+    - typeEval : TypeEval
+    - trimestre : Trimestre
+    - dateSaisie : DateTime
+  }
+
+  class Presence {
+    - date : Date
+    - statut : Present | Absent | Retard
+    - motif : String
+  }
+
+  class Bulletin {
+    - trimestre : Trimestre
+    - anneeScolaire : String
+    - statut : StatutBulletin
+    - moyenneGenerale : Decimal
+    - rang : Integer
+    - mention : Mention
+    - pdfUrl : String
+    + estTelechargeable() : Boolean
+  }
+
+  class LigneBulletin {
+    - moyenneMatiere : Decimal
+    - coefficient : Decimal
+    - pointsObtenus : Decimal
+    - appreciation : String
+  }
+}
+
+package "Finances" as PFin {
+  class Mensualite {
+    - mois : Integer
+    - anneeScolaire : String
+    - statut : StatutPaiement
+    - montantDu : Decimal
+    - montantPaye : Decimal
+    + recalerDepuisJournal()
+  }
+
+  class TransactionPaiement {
+    - montant : Decimal
+    - devise : String
+    - mode : ModePaiement
+    - canal : Guichet | Distance
+    - statut : EnAttente | Validee | Echoue | Annulee
+    - numeroRecu : String
+    - transactionRef : String
+  }
+}
+
+package "Communication" as PCom {
+  class Message {
+    - sujet : String
+    - contenu : String
+    - lu : Boolean
+  }
+
+  class Notification {
+    - titre : String
+    - message : String
+    - type : TypeNotification
+    - lu : Boolean
+  }
+
+  class Annonce {
+    - titre : String
+    - contenu : String
+    - cible : CibleAnnonce
+  }
+
+  class JournalAudit {
+    - action : ActionAudit
+    - entityType : String
+    - oldValue : JSON
+    - newValue : JSON
+  }
+}
+
+' ---- Identite ----
+ProfilGlobal "1" *-- "0..*" AdhesionEcole : possede
+Etablissement "1" *-- "0..*" AdhesionEcole : accueille
+AdhesionEcole --> Role
+
+' ---- Referentiel ----
+NiveauNational "1" *-- "0..*" GrilleCurriculum
+SerieNationale "0..1" o-- "0..*" GrilleCurriculum
+MatiereNationale "1" *-- "0..*" GrilleCurriculum
+
+' ---- Pedagogie (composition : cascade ON DELETE) ----
+Etablissement "1" *-- "0..*" Niveau : contient
+Etablissement "1" *-- "0..*" Classe
+Etablissement "1" *-- "0..*" Matiere
+NiveauNational "0..1" <-- Niveau : active
+MatiereNationale "0..1" <-- Matiere : active
+Niveau "1" *-- "0..*" Classe : structure
+SerieNationale "0..1" <-- Classe : serie lycee
+Classe "1" *-- "0..*" AffectationPedagogique
+Matiere "1" *-- "0..*" AffectationPedagogique
+AdhesionEcole "1" <-- AffectationPedagogique : enseignant
+AffectationPedagogique "1" *-- "0..*" Creneau
+
+' ---- Scolarite ----
+AdhesionEcole "1" *-- "0..1" Eleve : profil eleve
+Classe "1" o-- "0..*" Eleve : scolarise
+AdhesionEcole "1" -- "0..*" LienParental : parent
+Eleve "1" -- "0..*" LienParental : enfant
+Eleve "1" *-- "0..*" Note
+AffectationPedagogique "1" *-- "0..*" Note
+AdhesionEcole "1" <-- Note : enseignant
+Eleve "1" *-- "0..*" Presence
+AffectationPedagogique "1" *-- "0..*" Presence
+Eleve "1" *-- "0..*" Bulletin
+Bulletin "1" *-- "1..*" LigneBulletin : compose
+AffectationPedagogique "1" <-- LigneBulletin
+Bulletin --> StatutBulletin
+Note --> TypeEval
+
+' ---- Finances ----
+Eleve "1" *-- "0..*" Mensualite : annee
+Mensualite "1" *-- "0..*" TransactionPaiement : journal
+Mensualite --> StatutPaiement
+TransactionPaiement "0..1" <-- "0..1" TransactionPaiement : annule
+
+' ---- Communication ----
+Etablissement "1" *-- "0..*" Message
+AdhesionEcole "1" <-- Message : expediteur
+AdhesionEcole "1" <-- Message : destinataire
+ProfilGlobal "1" *-- "0..*" Notification
+Etablissement "1" *-- "0..*" Annonce
+Etablissement "1" *-- "0..*" JournalAudit
+
+note right of AffectationPedagogique
+  Classe-association Classe x Matiere x Enseignant.
+  Soft delete obligatoire :
+  un DELETE physique cascade
+  sur notes ET presences.
+end note
+
+note bottom of Bulletin
+  estTelechargeable() = statut PUBLIE
+  ET les 3 mensualites du trimestre
+  sont PAYE ou EXONERE.
+end note
+
+legend left
+  **Notation UML 2**
+  losange **plein** (*) : composition (cycle de vie lie, ON DELETE CASCADE)
+  losange **vide** (o) : aggregation
+  trait simple : association
+  multiplicites : 1, 0..1, 0..*, 1..*, 0..9
+endlegend
+
+@enduml

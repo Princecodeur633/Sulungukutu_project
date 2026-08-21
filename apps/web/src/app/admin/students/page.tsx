@@ -14,6 +14,8 @@ import {
   CREATE_STUDENT_MUTATION,
   UPDATE_STUDENT_MUTATION,
   TRANSFER_STUDENT_MUTATION,
+  LINK_PARENT_STUDENT_MUTATION,
+  SCHOOL_MEMBERS_QUERY,
 } from '@/lib/graphql/queries';
 import { CsvImport } from '@/components/forms/CsvImport';
 import { parseGqlError } from '@/lib/errorUtils';
@@ -180,7 +182,8 @@ function StudentCreatedModal({
   const [copiedPassword, setCopiedPassword] = useState<string | null>(null);
 
   const studentPassword = student?.tempPassword;
-  const studentCode     = student?.membership?.profile?.code;
+  const studentCode     = student?.membership?.profile?.code ?? student?.membership?.code;
+  const studentMatricule = student?.matricule;
   const studentPhone    = student?.membership?.profile?.phone;
   const parent = student?.parents?.[0]?.parent;
   const parentPassword = student?.parentTempPassword;
@@ -209,7 +212,8 @@ function StudentCreatedModal({
         <p className="text-[var(--tx-muted)] text-sm mb-5">
           Voici les identifiants temporaires à partager avec l'élève et son parent / tuteur.
           Sans email personnel, la connexion se fait avec l'identifiant ci-dessous
-          {studentPhone || parentPhone ? ' (ou le numéro de téléphone renseigné)' : ''}.
+          (code STU-… ou matricule {student?.matricule})
+          {studentPhone || parentPhone ? ' — ou le numéro de téléphone renseigné' : ''}.
         </p>
 
         <div className="space-y-3 text-left">
@@ -224,17 +228,26 @@ function StudentCreatedModal({
                 {copiedPassword === studentCode ? '✓ Copié' : <><Copy size={14} className="mr-1" /> Copier</>}
               </button>
             </div>
+            {studentMatricule && (
+              <p className="text-xs text-[var(--tx-muted)] mt-2">
+                Matricule aussi accepté : <span className="font-mono font-semibold text-[var(--tx-secondary)]">{studentMatricule}</span>
+              </p>
+            )}
           </div>
           <div className="bg-[var(--bg-subtle)] rounded-xl p-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-[var(--tx-muted)]">Mot de passe élève</p>
             <div className="mt-2 flex items-center justify-between gap-3">
-              <div className="font-mono text-sm font-bold text-[var(--tx-primary)] break-all">{studentPassword}</div>
+              <div className="font-mono text-sm font-bold text-[var(--tx-primary)] break-all">
+                {studentPassword ?? 'Compte déjà existant — utilisez le mot de passe connu'}
+              </div>
+              {studentPassword && (
               <button
                 onClick={() => studentPassword && copyPassword(studentPassword)}
                 className="btn-secondary px-3 py-2 text-sm whitespace-nowrap"
               >
                 {copiedPassword === studentPassword ? '✓ Copié' : <><Copy size={14} className="mr-1" /> Copier</>}
               </button>
+              )}
             </div>
           </div>
 
@@ -274,6 +287,86 @@ function StudentCreatedModal({
 
         <button onClick={onClose} className="btn-primary w-full justify-center mt-5">Fermer</button>
       </div>
+    </div>
+  );
+}
+
+function LinkParentForm({
+  schoolId,
+  student,
+  onLinked,
+}: {
+  schoolId: string;
+  student: any;
+  onLinked: (link: any) => void;
+}) {
+  const { addToast } = useToast();
+  const [parentMembershipId, setParentMembershipId] = useState('');
+  const [lien, setLien] = useState('TUTEUR');
+  const { data } = useQuery(SCHOOL_MEMBERS_QUERY, {
+    variables: { schoolId, role: 'PARENT', pagination: { page: 1, limit: 200 } },
+    skip: !schoolId,
+  });
+  const [linkParent, { loading }] = useMutation(LINK_PARENT_STUDENT_MUTATION);
+
+  const linkedIds = new Set((student.parents ?? []).map((p: any) => p.parent?.id));
+  const parents = (data?.schoolMembers?.data ?? []).filter((m: any) => !linkedIds.has(m.id));
+
+  const handleLink = async () => {
+    if (!parentMembershipId) return;
+    try {
+      const { data: result } = await linkParent({
+        variables: {
+          input: { parentMembershipId, studentId: student.id, lien },
+        },
+      });
+      onLinked(result?.linkParentStudent);
+      setParentMembershipId('');
+      addToast({ type: 'success', title: 'Parent lié à l\'élève' });
+    } catch (err: any) {
+      addToast({ type: 'error', title: 'Impossible de lier le parent', message: parseGqlError(err) });
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <p className="text-xs text-[var(--tx-muted)]">
+        Rattacher un compte parent déjà créé (annuaire ou inscription précédente).
+      </p>
+      <select
+        className="input text-sm py-1.5"
+        value={parentMembershipId}
+        onChange={(e) => setParentMembershipId(e.target.value)}
+      >
+        <option value="">— Choisir un parent —</option>
+        {parents.map((m: any) => (
+          <option key={m.id} value={m.id}>
+            {m.profile?.prenom} {m.profile?.nom}
+            {m.profile?.phone ? ` · ${m.profile.phone}` : ''}
+            {m.code ? ` · ${m.code}` : ''}
+          </option>
+        ))}
+      </select>
+      <div className="flex gap-2">
+        <select className="input text-sm py-1.5 flex-1" value={lien} onChange={(e) => setLien(e.target.value)}>
+          <option value="PERE">Père</option>
+          <option value="MERE">Mère</option>
+          <option value="TUTEUR">Tuteur</option>
+        </select>
+        <button
+          type="button"
+          onClick={handleLink}
+          disabled={!parentMembershipId || loading}
+          className="btn-primary py-1.5 text-sm whitespace-nowrap disabled:opacity-50"
+        >
+          {loading ? 'Lien…' : 'Lier'}
+        </button>
+      </div>
+      {parents.length === 0 && (
+        <p className="text-xs text-[var(--tx-muted)]">
+          Aucun compte parent libre dans l'établissement. Créez-en un en inscrivant un élève avec les infos du parent.
+        </p>
+      )}
     </div>
   );
 }
@@ -386,9 +479,12 @@ function CreateStudentModal({
 
           {/* Infos parent */}
           <div>
-            <h3 className="text-sm font-semibold text-[var(--tx-muted)] uppercase tracking-wider mb-3">
-              Parent / Tuteur (optionnel)
+            <h3 className="text-sm font-semibold text-[var(--tx-muted)] uppercase tracking-wider mb-1">
+              Parent / Tuteur
             </h3>
+            <p className="text-xs text-[var(--tx-muted)] mb-3">
+              Renseignez au moins le nom, un téléphone ou un email pour créer le compte parent et le lier à l'élève.
+            </p>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="label">Prénom parent</label>
@@ -704,27 +800,39 @@ function AdminStudentsPageInner() {
               </div>
 
               {/* Parents */}
-              {(selectedStudent.parents ?? []).length > 0 && (
-                <div>
-                  <h4 className="text-xs font-semibold text-[var(--tx-muted)] uppercase tracking-wide mb-3">
-                    Parents / Tuteurs
-                  </h4>
-                  <div className="space-y-2">
-                    {(selectedStudent.parents ?? []).map((p: any) => (
-                      <div key={p.id} className="card p-3 bg-[var(--bg-subtle)] border-[var(--bd)]">
-                        <p className="font-semibold text-sm text-[var(--tx-primary)]">
-                          {p.parent?.profile?.prenom} {p.parent?.profile?.nom}
-                          <span className="ml-2 badge badge-neutral text-xs">{p.lien}</span>
-                        </p>
-                        <p className="text-xs text-[var(--tx-muted)] mt-0.5">{p.parent?.profile?.email}</p>
-                        {p.parent?.profile?.phone && (
-                          <p className="text-xs text-[var(--tx-muted)]">{p.parent?.profile?.phone}</p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
+              <div>
+                <h4 className="text-xs font-semibold text-[var(--tx-muted)] uppercase tracking-wide mb-3">
+                  Parents / Tuteurs
+                </h4>
+                <div className="space-y-2 mb-3">
+                  {(selectedStudent.parents ?? []).length === 0 && (
+                    <p className="text-sm text-[var(--tx-muted)]">Aucun parent lié pour le moment.</p>
+                  )}
+                  {(selectedStudent.parents ?? []).map((p: any) => (
+                    <div key={p.id} className="card p-3 bg-[var(--bg-subtle)] border-[var(--bd)]">
+                      <p className="font-semibold text-sm text-[var(--tx-primary)]">
+                        {p.parent?.profile?.prenom} {p.parent?.profile?.nom}
+                        <span className="ml-2 badge badge-neutral text-xs">{p.lien}</span>
+                      </p>
+                      <p className="text-xs text-[var(--tx-muted)] mt-0.5">{p.parent?.profile?.email}</p>
+                      {p.parent?.profile?.phone && (
+                        <p className="text-xs text-[var(--tx-muted)]">{p.parent?.profile?.phone}</p>
+                      )}
+                    </div>
+                  ))}
                 </div>
-              )}
+                <LinkParentForm
+                  schoolId={schoolId}
+                  student={selectedStudent}
+                  onLinked={(link) => {
+                    if (!link) return;
+                    setStudent((prev: any) => prev
+                      ? { ...prev, parents: [...(prev.parents ?? []), link] }
+                      : prev);
+                    refetch();
+                  }}
+                />
+              </div>
 
               {/* Transfert de classe */}
               <div>

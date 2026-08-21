@@ -212,5 +212,10 @@ export const classResolvers = {
         .where(eq(students.classId, parent.id));
       return Number(result.count);
     },
+    level: async (parent: { level?: unknown; levelId?: string }, _: unknown, ctx: GraphQLContext) => {
+      if (parent.level) return parent.level;
+      if (!parent.levelId) return null;
+      return ctx.db.query.levels.findFirst({ where: eq(levels.id, parent.levelId) });
+    },
   },
 };

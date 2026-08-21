@@ -2,53 +2,101 @@
 import { useToast } from '@/components/ui/Toast';
 import { parseGqlError } from '@/lib/errorUtils';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
 import { BookOpen, CheckSquare, PenLine, Users, ChevronRight, Calendar } from 'lucide-react';
-import { BULK_CREATE_GRADES_MUTATION, CLASS_SUBJECTS_BY_TEACHER_QUERY, GRADES_BY_CLASS_SUBJECT_QUERY, MARK_ATTENDANCE_MUTATION, STUDENTS_BY_CLASS_QUERY } from '@/lib/graphql/queries';
+import { ATTENDANCE_BY_CLASS_SUBJECT_QUERY, BULK_CREATE_GRADES_MUTATION, CLASS_SUBJECTS_BY_TEACHER_QUERY, GRADES_BY_CLASS_SUBJECT_QUERY, MARK_ATTENDANCE_MUTATION, STUDENTS_BY_CLASS_QUERY } from '@/lib/graphql/queries';
 import { tokenStorage } from '@/lib/apollo/client';
 
 const JOURS = ['', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
 const TRIMESTRES = ['T1', 'T2', 'T3'] as const;
 const EVAL_TYPES = ['DEVOIR', 'CONTROLE', 'EXAMEN', 'INTERRO'] as const;
-const STATUT_CONFIG = {
-  PRESENT: { label: 'Présent', cls: 'bg-[var(--ok-bg)] text-[var(--ok)] hover:bg-emerald-200' },
-  ABSENT:  { label: 'Absent',  cls: 'bg-[var(--err-bg)] text-[var(--err)] hover:bg-red-200' },
-  RETARD:  { label: 'Retard',  cls: 'bg-[var(--warn-bg)] text-[var(--warn)] hover:bg-amber-200' },
+const STATUTS = ['PRESENT', 'ABSENT', 'RETARD'] as const;
+type Statut = typeof STATUTS[number];
+const STATUT_CONFIG: Record<Statut, { label: string; active: string; idle: string }> = {
+  PRESENT: {
+    label: 'Présent',
+    active: 'bg-emerald-600 text-white shadow-sm',
+    idle: 'bg-[var(--bg-subtle)] text-[var(--tx-muted)] hover:bg-emerald-50 hover:text-emerald-700',
+  },
+  ABSENT: {
+    label: 'Absent',
+    active: 'bg-red-600 text-white shadow-sm',
+    idle: 'bg-[var(--bg-subtle)] text-[var(--tx-muted)] hover:bg-red-50 hover:text-red-700',
+  },
+  RETARD: {
+    label: 'Retard',
+    active: 'bg-amber-500 text-white shadow-sm',
+    idle: 'bg-[var(--bg-subtle)] text-[var(--tx-muted)] hover:bg-amber-50 hover:text-amber-800',
+  },
 };
 
+function localISODate(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 function AttendancePanel({ classSubject, students }: { classSubject: any; students: any[] }) {
-  const today = new Date().toISOString().split('T')[0];
-  const [records, setRecords] = useState<Record<string, 'PRESENT'|'ABSENT'|'RETARD'>>(() => {
-    const init: Record<string, 'PRESENT'|'ABSENT'|'RETARD'> = {};
-    students.forEach((s) => { init[s.id] = 'PRESENT'; });
-    return init;
+  const [date, setDate] = useState(localISODate);
+  const [records, setRecords] = useState<Record<string, Statut>>({});
+  const [saved, setSaved] = useState(false);
+  const dirtyRef = useRef(false);
+
+  const { data: attData, loading: attLoading } = useQuery(ATTENDANCE_BY_CLASS_SUBJECT_QUERY, {
+    variables: { classSubjectId: classSubject.id, date },
+    skip: !classSubject.id,
   });
 
   const [markAttendance, { loading }] = useMutation(MARK_ATTENDANCE_MUTATION);
-  const [saved, setSaved] = useState(false);
+  const studentKey = students.map((s: { id: string }) => s.id).join(',');
 
-  const toggle = (studentId: string) => {
-    setRecords((r) => {
-      const cycle: ('PRESENT'|'ABSENT'|'RETARD')[] = ['PRESENT', 'ABSENT', 'RETARD'];
-      const cur = r[studentId] ?? 'PRESENT';
-      const next = cycle[(cycle.indexOf(cur) + 1) % cycle.length];
-      return { ...r, [studentId]: next };
-    });
+  useEffect(() => {
+    dirtyRef.current = false;
+  }, [date, classSubject.id]);
+
+  useEffect(() => {
+    if (dirtyRef.current) return;
+    const init: Record<string, Statut> = {};
+    students.forEach((s) => { init[s.id] = 'PRESENT'; });
+    for (const a of attData?.attendanceByClassSubject ?? []) {
+      const sid = a.studentId ?? a.student?.id;
+      if (sid && (a.statut === 'PRESENT' || a.statut === 'ABSENT' || a.statut === 'RETARD')) {
+        init[sid] = a.statut;
+      }
+    }
+    setRecords(init);
+  }, [studentKey, attData, students]);
+
+  const setStatut = (studentId: string, statut: Statut) => {
+    dirtyRef.current = true;
+    setRecords((r) => ({ ...r, [studentId]: statut }));
+    setSaved(false);
   };
 
   const { addToast } = useToast();
   const handleSave = async () => {
+    const payload = Object.entries(records).map(([studentId, statut]) => ({ studentId, statut }));
+    if (payload.length === 0) {
+      addToast({ type: 'error', title: 'Aucun élève à enregistrer' });
+      return;
+    }
     try {
       await markAttendance({
         variables: {
           input: {
             classSubjectId: classSubject.id,
-            date:           today,
-            records:        Object.entries(records).map(([studentId, statut]) => ({ studentId, statut })),
+            date,
+            records: payload,
           },
         },
+        refetchQueries: [{
+          query: ATTENDANCE_BY_CLASS_SUBJECT_QUERY,
+          variables: { classSubjectId: classSubject.id, date },
+        }],
       });
+      dirtyRef.current = false;
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
       addToast({ type: 'success', title: 'Présences enregistrées' });
@@ -59,53 +107,78 @@ function AttendancePanel({ classSubject, students }: { classSubject: any; studen
 
   const presentCount = Object.values(records).filter((s) => s === 'PRESENT').length;
   const absentCount  = Object.values(records).filter((s) => s === 'ABSENT').length;
+  const retardCount  = Object.values(records).filter((s) => s === 'RETARD').length;
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-4 text-sm">
-          <span className="text-[var(--ok)] font-semibold">{presentCount} présents</span>
-          <span className="text-[var(--err)] font-semibold">{absentCount} absents</span>
-          <span className="text-[var(--tx-muted)]">
-            {Object.values(records).filter((s) => s === 'RETARD').length} retards
-          </span>
+          <label className="flex items-center gap-1.5 text-[var(--tx-muted)]">
+            <Calendar size={14} />
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="input py-1 text-xs"
+            />
+          </label>
+          <span className="text-emerald-700 font-semibold">{presentCount} présents</span>
+          <span className="text-red-600 font-semibold">{absentCount} absents</span>
+          <span className="text-amber-600 font-semibold">{retardCount} retards</span>
         </div>
         <div className="flex gap-2">
           <button
-            onClick={() => setRecords(Object.fromEntries(students.map((s) => [s.id, 'PRESENT'])))}
+            onClick={() => {
+              dirtyRef.current = true;
+              setRecords(Object.fromEntries(students.map((s) => [s.id, 'PRESENT'])));
+              setSaved(false);
+            }}
             className="btn-secondary py-1 text-xs"
           >
             Tous présents
           </button>
-          <button onClick={handleSave} disabled={loading} className="btn-primary py-1">
+          <button onClick={handleSave} disabled={loading || attLoading} className="btn-primary py-1">
             {saved ? '✓ Enregistré !' : loading ? 'Enregistrement...' : 'Enregistrer'}
           </button>
         </div>
       </div>
 
       <div className="space-y-1.5">
-        {students.map((s, i) => {
-          const st = (records[s.id] ?? 'PRESENT') as keyof typeof STATUT_CONFIG;
-          const cfg = STATUT_CONFIG[st];
+        {attLoading ? (
+          <div className="flex items-center justify-center py-10 text-[var(--tx-muted)] text-sm">
+            Chargement des présences...
+          </div>
+        ) : students.map((s, i) => {
+          const st = (records[s.id] ?? 'PRESENT') as Statut;
           const profile = s.membership?.profile;
           return (
             <div key={s.id} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-[var(--bg-subtle)]">
               <span className="text-xs text-[var(--tx-muted)] w-6 text-right">{i + 1}.</span>
-              <div className="flex-1 flex items-center gap-2">
+              <div className="flex-1 flex items-center gap-2 min-w-0">
                 <div className="w-7 h-7 rounded-full bg-[var(--info-bg)] flex items-center justify-center
-                                text-[var(--tx-primary)] text-xs font-bold">
+                                text-[var(--tx-primary)] text-xs font-bold flex-shrink-0">
                   {profile?.prenom?.[0] ?? '?'}
                 </div>
-                <span className="text-sm font-medium text-[var(--tx-primary)]">
+                <span className="text-sm font-medium text-[var(--tx-primary)] truncate">
                   {profile?.prenom} {profile?.nom}
                 </span>
               </div>
-              <button
-                onClick={() => toggle(s.id)}
-                className={`px-3 py-1 rounded-md text-xs font-semibold transition-all w-20 ${cfg.cls}`}
-              >
-                {cfg.label}
-              </button>
+              <div className="flex gap-1 flex-shrink-0">
+                {STATUTS.map((statut) => {
+                  const cfg = STATUT_CONFIG[statut];
+                  const active = st === statut;
+                  return (
+                    <button
+                      key={statut}
+                      type="button"
+                      onClick={() => setStatut(s.id, statut)}
+                      className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all ${active ? cfg.active : cfg.idle}`}
+                    >
+                      {cfg.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           );
         })}
@@ -232,7 +305,7 @@ export default function TeacherClassesPage() {
   const classSubjects = data?.classSubjectsByTeacher ?? [];
 
   const { data: studentData } = useQuery(STUDENTS_BY_CLASS_QUERY, {
-    variables: { classId: activeCS?.class?.id },
+    variables: { classId: activeCS?.class?.id, pagination: { page: 1, limit: 200 } },
     skip:      !activeCS?.class?.id,
   });
   const students = studentData?.studentsByClass?.data ?? [];
@@ -329,7 +402,7 @@ export default function TeacherClassesPage() {
                 Aucun élève dans cette classe
               </div>
             ) : activeTab === 'presence' ? (
-              <AttendancePanel classSubject={activeCS} students={students} />
+              <AttendancePanel key={activeCS.id} classSubject={activeCS} students={students} />
             ) : (
               <GradesPanel classSubject={activeCS} students={students} />
             )}

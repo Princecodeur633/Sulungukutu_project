@@ -1,9 +1,9 @@
 import { generateTempPassword } from '../../utils/password';
 import { normalizePhone } from '../../utils/phone';
 import bcrypt from 'bcryptjs';
-import { and, eq, or, sql } from 'drizzle-orm';
+import { and, eq, ilike, isNull, or, sql, SQL } from 'drizzle-orm';
 import { GraphQLError } from 'graphql';
-import { globalProfiles, schoolMemberships } from '../../db/schema';
+import { globalProfiles, schoolMemberships, students } from '../../db/schema';
 import {
   signAccessToken,
   signRefreshToken,
@@ -16,6 +16,57 @@ import { LoginSchema, ChangePasswordSchema } from '../../utils/validators/schema
 import type { GraphQLContext } from '../../middleware/auth';
 import { emailService } from '../../services/email.service';
 import { enforcLoginRateLimit, getClientIp } from '../../middleware/rate-limit';
+import type { DB } from '../../db';
+
+function combineOr(...conditions: Array<SQL | undefined>): SQL | undefined {
+  const defined = conditions.filter((c): c is SQL => c != null);
+  if (defined.length === 0) return undefined;
+  return defined.reduce((acc, c) => or(acc, c) ?? acc);
+}
+
+/**
+ * Résout un identifiant de connexion : email, code profil (STU-…),
+ * code membership, téléphone, ou matricule élève.
+ */
+async function findProfileByIdentifiant(db: DB, rawIdentifiant: string) {
+  const raw = rawIdentifiant.trim();
+  const code = raw.toUpperCase();
+  const normalizedPhone = normalizePhone(raw);
+
+  const profile = await db.query.globalProfiles.findFirst({
+    where: combineOr(
+      eq(globalProfiles.email, raw.toLowerCase()),
+      eq(globalProfiles.code, code),
+      eq(globalProfiles.phone, raw),
+      normalizedPhone.length >= 8
+        ? sql`regexp_replace(${globalProfiles.phone}, '[^0-9]', '', 'g') LIKE ${'%' + normalizedPhone.slice(-8)}`
+        : undefined,
+    ),
+  });
+  if (profile) return { profile, preferredMembershipId: undefined as string | undefined };
+
+  const membership = await db.query.schoolMemberships.findFirst({
+    where: eq(schoolMemberships.code, code),
+    with: { profile: true },
+  });
+  if (membership?.profile) {
+    return { profile: membership.profile, preferredMembershipId: membership.id };
+  }
+
+  const student = await db.query.students.findFirst({
+    where: and(ilike(students.matricule, raw), isNull(students.deletedAt)),
+    with: { membership: { with: { profile: true } } },
+  });
+  const studentProfile = student?.membership?.profile;
+  if (student && studentProfile) {
+    return {
+      profile: studentProfile,
+      preferredMembershipId: student.membershipId,
+    };
+  }
+
+  return { profile: null, preferredMembershipId: undefined as string | undefined };
+}
 
 // ── Utilitaires locaux ────────────────────────────────────────────
 
@@ -68,29 +119,19 @@ export const authResolvers = {
     ) => {
       // Brute-force protection : 10 tentatives / 5 min par IP
       enforcLoginRateLimit(getClientIp(ctx.request as any));
-      const input = LoginSchema.parse(args.input);
+      let input;
+      try {
+        input = LoginSchema.parse(args.input);
+      } catch {
+        throw new GraphQLError('Identifiant ou mot de passe incorrect', {
+          extensions: { code: 'UNAUTHENTICATED' },
+        });
+      }
 
-      // Avant : la connexion n'était possible que par email exact. Beaucoup
-      // d'utilisateurs (parents, élèves) n'ont pas d'adresse email
-      // personnelle et ne mémorisent pas l'email interne généré
-      // automatiquement (prenom.nom@ecole.sulungukutu.local). On accepte
-      // désormais aussi l'identifiant de connexion (matricule, ex:
-      // STU-A1B2, distribué sur le reçu d'inscription) ou le téléphone.
-      const raw = input.identifiant.trim();
-      const normalizedPhone = normalizePhone(raw);
-      const profile = await ctx.db.query.globalProfiles.findFirst({
-        where: or(
-          eq(globalProfiles.email, raw.toLowerCase()),
-          eq(globalProfiles.code,  raw.toUpperCase()),
-          eq(globalProfiles.phone, raw),
-          // Comparaison normalisée : ignore espaces/tirets/préfixe +242,
-          // pour qu'un numéro tapé sous n'importe quel format courant
-          // corresponde à ce qui a été enregistré.
-          normalizedPhone.length >= 8
-            ? sql`regexp_replace(${globalProfiles.phone}, '[^0-9]', '', 'g') LIKE ${'%' + normalizedPhone.slice(-8)}`
-            : undefined,
-        ),
-      });
+      const { profile, preferredMembershipId } = await findProfileByIdentifiant(
+        ctx.db,
+        input.identifiant
+      );
 
       if (!profile) {
         throw new GraphQLError('Identifiant ou mot de passe incorrect', {
@@ -114,32 +155,38 @@ export const authResolvers = {
         with: { school: true },
       });
 
+      const currentMembership =
+        (preferredMembershipId
+          ? memberships.find((m) => m.id === preferredMembershipId)
+          : undefined)
+        ?? memberships[0];
+
       // NOTE: le rôle SUPER_ADMIN doit venir du profil (`profile.isSuperAdmin`),
       // pas uniquement d'un membership d'école. Avant ce correctif, un compte
       // Super-Admin sans membership actif (ou dont l'unique membership était
       // désactivé) se voyait attribuer le rôle "STUDENT" par défaut et perdait
       // tout accès aux fonctionnalités Super-Admin après connexion.
-      const role = profile.isSuperAdmin ? 'SUPER_ADMIN' : (memberships[0]?.role ?? 'STUDENT');
+      const role = profile.isSuperAdmin ? 'SUPER_ADMIN' : (currentMembership?.role ?? 'STUDENT');
 
       const accessToken = signAccessToken({
         profileId: profile.id,
         email:     profile.email,
         role,
-        schoolId:  memberships[0]?.schoolId,
-        membershipId: memberships[0]?.id,
+        schoolId:  currentMembership?.schoolId,
+        membershipId: currentMembership?.id,
       });
 
       const refreshToken = signRefreshToken({
         profileId: profile.id,
-        schoolId:  memberships[0]?.schoolId,
-        membershipId: memberships[0]?.id,
+        schoolId:  currentMembership?.schoolId,
+        membershipId: currentMembership?.id,
       });
 
       return {
         accessToken,
         refreshToken,
         profile,
-        currentMembership:       memberships[0] ?? null,
+        currentMembership:       currentMembership ?? null,
         availableMemberships:    memberships,
       };
     },
@@ -303,18 +350,7 @@ export const authResolvers = {
     ) => {
       enforcLoginRateLimit(getClientIp(ctx.request as any));
       const raw = args.identifiant.trim();
-      const normalizedPhone = normalizePhone(raw);
-
-      const profile = await ctx.db.query.globalProfiles.findFirst({
-        where: or(
-          eq(globalProfiles.email, raw.toLowerCase()),
-          eq(globalProfiles.code,  raw.toUpperCase()),
-          eq(globalProfiles.phone, raw),
-          normalizedPhone.length >= 8
-            ? sql`regexp_replace(${globalProfiles.phone}, '[^0-9]', '', 'g') LIKE ${'%' + normalizedPhone.slice(-8)}`
-            : undefined,
-        ),
-      });
+      const { profile } = await findProfileByIdentifiant(ctx.db, raw);
 
       // Toujours renvoyer true (même si le compte n'existe pas) : on ne
       // révèle jamais si un identifiant est enregistré ou non.

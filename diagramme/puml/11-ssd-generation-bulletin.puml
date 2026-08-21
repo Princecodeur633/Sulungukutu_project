@@ -1,0 +1,33 @@
+@startuml 11-ssd-generation-bulletin
+!include _theme.puml
+!pragma teoz true
+title "Diagramme de séquence système — génération et publication d'un bulletin"
+
+autonumber
+actor "Administrateur" as Admin
+participant ":sulungukutu" as Sys
+actor "Parent" as Parent
+actor "Eleve" as Eleve
+
+Admin -> Sys : generateBulletins(classId, trimestre, anneeScolaire)
+activate Sys
+Sys --> Admin : [Bulletin] (statut BROUILLON,\nmoyenneGenerale, rang, mention)
+deactivate Sys
+
+Admin -> Sys : publishBulletin(bulletinId)
+activate Sys
+Sys -> Parent : notifier("Bulletin publie")
+Sys -> Eleve : notifier("Bulletin publie")
+Sys --> Admin : Bulletin (statut PUBLIE, pdfUrl)
+deactivate Sys
+
+Eleve -> Sys : telechargerBulletin(bulletinId)
+activate Sys
+alt trimestre solde (PAYE ou EXONERE)
+  Sys --> Eleve : PDF (Authorization + private, no-store)
+else scolarite incomplete
+  Sys --> Eleve : refus (bulletin verrouille)
+end
+deactivate Sys
+
+@enduml

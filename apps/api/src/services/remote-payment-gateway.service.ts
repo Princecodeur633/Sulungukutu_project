@@ -10,6 +10,7 @@
 import { eq } from 'drizzle-orm';
 import { paymentTransactions } from '../db/schema';
 import { generateTransactionRef } from '../utils/code-generator';
+import { normalizePhone } from '../utils/phone';
 import { recomputePaymentAggregate } from './payment.service';
 import { paymentService } from './payment.service';
 import { auditService } from './audit.service';
@@ -30,13 +31,14 @@ export interface PaymentGatewayProvider {
   resolve(input: { montant: number; numeroTelephone: string }): Promise<RemotePaymentOutcome>;
 }
 
-const INVALID_PHONE_REGEX = /^(\+?242)?0?[0-9]{9}$/; // tolérant, pour la démo Congo-Brazzaville
+const INVALID_PHONE_REGEX = /^(\+?242)?0?[0-9]{8,10}$/;
 
 /**
  * Fournisseur simulé : ne contacte aucun vrai opérateur. Le résultat est
  * déterminé par des règles simples et reproductibles pour permettre de
- * tester chaque scénario à la demande (numéro/montant "magiques"), avec un
- * peu d'aléatoire sinon pour simuler un comportement réel.
+ * tester chaque scénario à la demande (numéro/montant "magiques").
+ * Hors cas magiques, la simulation aboutit — un vrai opérateur pourra
+ * remplacer cette classe sans toucher au reste de l'app.
  */
 class SimulatedProvider implements PaymentGatewayProvider {
   async initiate(input: { montant: number; numeroTelephone: string }) {
@@ -45,18 +47,17 @@ class SimulatedProvider implements PaymentGatewayProvider {
 
   async resolve(input: { montant: number; numeroTelephone: string }): Promise<RemotePaymentOutcome> {
     const { montant, numeroTelephone } = input;
+    const normalized = normalizePhone(numeroTelephone);
 
-    // Scénarios déterministes pour les tests / démonstrations
-    if (!INVALID_PHONE_REGEX.test(numeroTelephone.replace(/\s/g, ''))) {
+    if (!normalized || normalized.length < 8 || !INVALID_PHONE_REGEX.test(normalized)) {
       return 'ECHOUEE_NUMERO_INVALIDE';
     }
-    if (numeroTelephone.endsWith('0000')) return 'ECHOUEE_ERREUR_RESEAU';
-    if (numeroTelephone.endsWith('1111')) return 'ECHOUEE_DELAI_EXPIRE';
-    if (numeroTelephone.endsWith('9999')) return 'ECHOUEE_SOLDE_INSUFFISANT';
+    if (normalized.endsWith('0000')) return 'ECHOUEE_ERREUR_RESEAU';
+    if (normalized.endsWith('1111')) return 'ECHOUEE_DELAI_EXPIRE';
+    if (normalized.endsWith('9999')) return 'ECHOUEE_SOLDE_INSUFFISANT';
     if (montant <= 0) return 'ECHOUEE_SOLDE_INSUFFISANT';
 
-    // Sinon : comportement probabiliste réaliste pour la démo (85% de succès)
-    return Math.random() < 0.85 ? 'VALIDEE' : 'ECHOUEE_SOLDE_INSUFFISANT';
+    return 'VALIDEE';
   }
 }
 

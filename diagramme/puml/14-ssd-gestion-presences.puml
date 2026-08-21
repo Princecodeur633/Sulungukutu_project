@@ -1,0 +1,30 @@
+@startuml 14-ssd-gestion-presences
+!include _theme.puml
+!pragma teoz true
+title "Diagramme de séquence système — gestion des présences"
+
+autonumber
+actor "Enseignant" as Ens
+participant ":sulungukutu" as Sys
+actor "Parent" as Parent
+
+Ens -> Sys : attendanceByClassSubject(classSubjectId, date)
+activate Sys
+Sys --> Ens : [Presence]
+deactivate Sys
+
+Ens -> Sys : markAttendance(classSubjectId, date, [(eleve, statut, motif)])
+activate Sys
+Sys --> Ens : [Presence] PRESENT | ABSENT | RETARD
+opt statut = ABSENT
+  Sys -> Parent : notifier(ABSENCE) + email
+end
+Sys --> Ens : evenement temps reel attendanceUpdated
+deactivate Sys
+
+Ens -> Sys : updateAttendance(id, statut, motif)
+activate Sys
+Sys --> Ens : Presence mise a jour
+deactivate Sys
+
+@enduml

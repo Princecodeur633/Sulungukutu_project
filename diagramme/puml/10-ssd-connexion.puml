@@ -1,0 +1,28 @@
+@startuml 10-ssd-connexion
+!include _theme.puml
+!pragma teoz true
+title "Diagramme de séquence système — connexion\nSSD (Larman) : acteur et système boîte noire"
+
+autonumber
+actor "Utilisateur" as U
+participant ":sulungukutu" as Sys
+
+U -> Sys : seConnecter(identifiant, motDePasse)
+activate Sys
+
+alt identifiants valides et quota IP respecté
+  Sys --> U : AuthPayload(accessToken, refreshToken,\nprofil, adhesionCourante, adhesions)
+else identifiants invalides
+  Sys --> U : erreur UNAUTHENTICATED\n("Identifiant ou mot de passe incorrect")
+else trop de tentatives (10 / 5 min / IP)
+  Sys --> U : erreur (quota depasse)
+end
+
+deactivate Sys
+
+U -> Sys : accederAuTableauDeBord(role)
+activate Sys
+Sys --> U : espace Super-admin | Admin | Enseignant | Parent | Eleve
+deactivate Sys
+
+@enduml

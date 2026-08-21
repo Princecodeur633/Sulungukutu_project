@@ -35,7 +35,7 @@ export const studentResolvers = {
       requireSchoolMember(ctx, targetClass.schoolId);
 
       const page   = args.pagination?.page  ?? 1;
-      const limit  = args.pagination?.limit ?? 30;
+      const limit  = args.pagination?.limit ?? 200;
       const offset = (page - 1) * limit;
 
       // Les élèves "soft-deleted" ne sont plus listés par défaut.
@@ -357,22 +357,18 @@ export const studentResolvers = {
       const tempPassword = generateTempPassword();
       const passwordHash = await bcrypt.hash(tempPassword, 12);
       const studentProfileWasCreated = !studentProfile;
-
-      // Identity Service : génère un identifiant de connexion unique et,
-      // si aucun email n'a été fourni, un email interne normalisé et
-      // garanti unique (plutôt que la précédente logique ad hoc
-      // `${code.toLowerCase()}@edu.local`, sans contrôle de collision réel).
-      const studentIdentity = await identityService.createIdentity(ctx.db, {
-        role: 'STUDENT',
-        nom: input.nom,
-        prenom: input.prenom,
-        schoolId: input.schoolId,
-        schoolCode: school?.code ?? input.schoolId,
-        explicitEmail: input.email ?? null,
-        actorMembershipId: user.membershipId,
-      });
+      let membershipLoginCode: string;
 
       if (!studentProfile) {
+        const studentIdentity = await identityService.createIdentity(ctx.db, {
+          role: 'STUDENT',
+          nom: input.nom,
+          prenom: input.prenom,
+          schoolId: input.schoolId,
+          schoolCode: school?.code ?? input.schoolId,
+          explicitEmail: input.email ?? null,
+          actorMembershipId: user.membershipId,
+        });
         const [created] = await withFriendlyUniqueError(() => ctx.db
           .insert(globalProfiles)
           .values({
@@ -385,17 +381,21 @@ export const studentResolvers = {
           })
           .returning());
         studentProfile = created;
+        membershipLoginCode = studentIdentity.code;
+      } else {
+        membershipLoginCode = await identityService.reuseOrGenerateLoginCode(
+          ctx.db, 'STUDENT', input.nom, input.prenom, studentProfile.code
+        );
       }
 
       // ── 2. Créer le membership STUDENT ────────────────────
-      const membershipCode = await identityService.generateUniqueLoginCode(ctx.db, 'STUDENT', input.nom, input.prenom);
       const [membership] = await ctx.db
         .insert(schoolMemberships)
         .values({
           profileId: studentProfile.id,
           schoolId:  input.schoolId,
           role:      'STUDENT',
-          code:      membershipCode,
+          code:      membershipLoginCode,
           status:    'ACTIVE',
         })
         .returning();
@@ -446,7 +446,7 @@ export const studentResolvers = {
       // et sert aussi à reconnaître un parent déjà enregistré pour un
       // autre enfant (même numéro, email éventuellement différent/absent).
       let parentTempPassword: string | null = null;
-      if (input.parentEmail || input.parentPhone) {
+      if (input.parentEmail || input.parentPhone || input.parentNom || input.parentPrenom) {
         const normalizedParentPhone = input.parentPhone ? normalizePhone(input.parentPhone) : null;
         let parentProfile = await ctx.db.query.globalProfiles.findFirst({
           where: or(
@@ -494,8 +494,8 @@ export const studentResolvers = {
 
         let parentMembership = existingParentMembership;
         if (!parentMembership) {
-          const pCode = await identityService.generateUniqueLoginCode(
-            ctx.db, 'PARENT', input.parentNom ?? 'Parent', input.parentPrenom ?? ''
+          const pCode = await identityService.reuseOrGenerateLoginCode(
+            ctx.db, 'PARENT', parentProfile.nom, parentProfile.prenom, parentProfile.code
           );
           const [pm] = await ctx.db
             .insert(schoolMemberships)
@@ -515,7 +515,7 @@ export const studentResolvers = {
           parentMembershipId: parentMembership.id,
           studentId:          newStudent.id,
           lien:               (input.parentLien ?? "TUTEUR") as 'PERE' | 'MERE' | 'TUTEUR',
-        });
+        }).onConflictDoNothing();
 
         // ── Email au parent (seulement s'il a un email réel) ────
 
@@ -575,7 +575,7 @@ export const studentResolvers = {
 
       return createdStudent ? {
         ...createdStudent,
-        tempPassword,
+        tempPassword: studentProfileWasCreated ? tempPassword : null,
         parentTempPassword,
       } : null;
     },
@@ -770,7 +770,13 @@ export const studentResolvers = {
         description: 'Parent rattaché à un élève',
       });
 
-      return link;
+      return ctx.db.query.parentStudents.findFirst({
+        where: eq(parentStudents.id, link.id),
+        with: {
+          parent: { with: { profile: true } },
+          student: { with: { membership: { with: { profile: true } } } },
+        },
+      });
     },
 
     unlinkParentStudent: async (

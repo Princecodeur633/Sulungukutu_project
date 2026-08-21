@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import { parse as parseUrl } from 'url';
 import { and, eq } from 'drizzle-orm';
 import { db } from '../db';
-import { students, parentStudents, classes } from '../db/schema';
+import { students, parentStudents, classes, schoolMemberships } from '../db/schema';
 import { extractBearerToken, type JWTPayload } from '../utils/jwt';
 import { resolveCurrentUser } from './auth';
 
@@ -52,16 +52,36 @@ export async function requireHttpStudentAccess(
   if (user.role === 'STUDENT') {
     const student = await db.query.students.findFirst({ where: eq(students.id, studentId) });
     if (student && student.membershipId === user.membershipId) return;
+    const studentMembership = await db.query.schoolMemberships.findFirst({
+      where: and(
+        eq(schoolMemberships.profileId, user.profileId),
+        eq(schoolMemberships.schoolId, schoolId),
+        eq(schoolMemberships.role, 'STUDENT'),
+        eq(schoolMemberships.status, 'ACTIVE'),
+      ),
+    });
+    if (student && studentMembership && student.membershipId === studentMembership.id) return;
     throw new HttpAuthError(403, 'Vous ne pouvez consulter que vos propres informations.');
   }
 
   if (user.role === 'PARENT') {
-    const link = await db.query.parentStudents.findFirst({
+    const parentMembership = await db.query.schoolMemberships.findFirst({
       where: and(
-        eq(parentStudents.parentMembershipId, user.membershipId!),
-        eq(parentStudents.studentId, studentId)
+        eq(schoolMemberships.profileId, user.profileId),
+        eq(schoolMemberships.schoolId, schoolId),
+        eq(schoolMemberships.role, 'PARENT'),
+        eq(schoolMemberships.status, 'ACTIVE'),
       ),
     });
+    const parentMembershipId = parentMembership?.id ?? user.membershipId;
+    const link = parentMembershipId
+      ? await db.query.parentStudents.findFirst({
+          where: and(
+            eq(parentStudents.parentMembershipId, parentMembershipId),
+            eq(parentStudents.studentId, studentId)
+          ),
+        })
+      : undefined;
     if (link) return;
     throw new HttpAuthError(403, "Cet élève n'est pas rattaché à votre compte parent.");
   }

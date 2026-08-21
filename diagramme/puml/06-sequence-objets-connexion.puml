@@ -1,0 +1,90 @@
+@startuml 06-sequence-objets-connexion
+!include _theme.puml
+!pragma teoz true
+title "Diagramme de séquence objets — connexion d'un utilisateur\nUML 2 : barres d'activation, fragments alt / opt"
+
+autonumber
+actor "Utilisateur" as U
+participant ":PageLogin" as Page
+participant ":ApolloClient" as Apollo
+participant ":GraphQLYoga" as Yoga
+participant ":RateLimiter" as RL
+participant ":AuthResolver" as Auth
+database ":PostgreSQL" as DB
+participant ":Bcrypt" as Bcrypt
+participant ":JwtUtil" as JWT
+
+U -> Page : soumettre(identifiant, motDePasse)
+activate Page
+Page -> Apollo : mutate(login, input)
+activate Apollo
+Apollo -> Yoga : POST /graphql { mutation login }
+activate Yoga
+
+Yoga -> RL : enforcLoginRateLimit(ip)
+activate RL
+RL --> Yoga : autorise / refuse
+deactivate RL
+
+alt quota IP depasse (10 / 5 min)
+  Yoga --> Apollo : erreur
+  Apollo --> Page : UNAUTHENTICATED
+  Page --> U : "Trop de tentatives"
+else quota OK
+  Yoga -> Auth : login(input)
+  activate Auth
+
+  Auth -> Auth : LoginSchema.parse(input)
+
+  Auth -> DB : findProfileByIdentifiant(email | tel | code | matricule)
+  activate DB
+  DB --> Auth : ProfilGlobal ou vide
+  deactivate DB
+
+  alt profil introuvable
+    Auth --> Yoga : GraphQLError UNAUTHENTICATED
+  else profil trouve
+    Auth -> Bcrypt : compare(motDePasse, passwordHash)
+    activate Bcrypt
+    Bcrypt --> Auth : booleen
+    deactivate Bcrypt
+
+    alt mot de passe invalide
+      Auth --> Yoga : GraphQLError UNAUTHENTICATED
+    else mot de passe valide
+      Auth -> DB : schoolMemberships (status = ACTIVE)
+      activate DB
+      DB --> Auth : adhesions + ecoles
+      deactivate DB
+
+      Auth -> Auth : role = isSuperAdmin ? SUPER_ADMIN : adhesion.role
+
+      Auth -> JWT : signAccessToken(profileId, role, schoolId, membershipId)
+      activate JWT
+      JWT --> Auth : accessToken (7 j)
+      Auth -> JWT : signRefreshToken(profileId, schoolId, membershipId)
+      JWT --> Auth : refreshToken (30 j)
+      deactivate JWT
+
+      Auth --> Yoga : AuthPayload
+    end
+  end
+
+  deactivate Auth
+  Yoga --> Apollo : AuthPayload
+  deactivate Yoga
+  Apollo --> Page : tokens + profil + memberships
+  deactivate Apollo
+
+  Page -> Page : localStorage + cookie SameSite=Strict
+  Page --> U : redirection /admin | /teacher | /parent | /student | /superadmin
+end
+
+deactivate Page
+
+legend left
+  Les rectangles gris sur les lignes de vie sont les **barres d activation** (UML 2).
+  Le fragment **alt** modelise les flots d exception (quota, identifiants).
+endlegend
+
+@enduml

@@ -1,0 +1,51 @@
+@startuml 03-communication-connexion
+!include _theme.puml
+title "Diagramme de communication — connexion d'un utilisateur\nUML 2 : objets, liens et messages numérotés"
+
+left to right direction
+skinparam nodesep 60
+skinparam ranksep 55
+
+actor "Utilisateur" as U
+
+object ":PageLogin" as Page
+object ":ApolloClient" as Apollo
+object ":GraphQLYoga" as Yoga
+object ":RateLimiter" as RL
+object ":AuthResolver" as Auth
+object ":PostgreSQL" as DB
+object ":Bcrypt" as Bcrypt
+object ":JwtUtil" as JWT
+
+U --> Page : "1 : saisir(identifiant, motDePasse)"
+Page --> Apollo : "2 : mutate(login)"
+Apollo --> Yoga : "3 : POST /graphql"
+Yoga --> RL : "4 : enforcLoginRateLimit(ip)"
+RL --> Yoga : "5 : quota OK"
+Yoga --> Auth : "6 : login(input)"
+Auth --> DB : "7 : findProfileByIdentifiant()"
+DB --> Auth : "8 : ProfilGlobal"
+Auth --> Bcrypt : "9 : compare(password, hash)"
+Bcrypt --> Auth : "10 : valide"
+Auth --> DB : "11 : memberships ACTIVE"
+DB --> Auth : "12 : [AdhesionEcole]"
+Auth --> JWT : "13 : signAccessToken() / signRefreshToken()"
+JWT --> Auth : "14 : jetons JWT"
+Auth --> Page : "15 : AuthPayload"
+Page --> U : "16 : rediriger(tableau de bord du role)"
+
+note bottom of Auth
+  Identifiant accepte :
+  email, telephone, code profil,
+  code adhesion, matricule eleve.
+  Role SUPER_ADMIN lu sur
+  ProfilGlobal.isSuperAdmin
+  (pas uniquement sur l adhesion).
+end note
+
+note top of RL
+  10 tentatives / 5 min / IP
+  au-dela : rejet
+end note
+
+@enduml

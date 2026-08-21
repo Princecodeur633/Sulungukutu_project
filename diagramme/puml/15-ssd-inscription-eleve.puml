@@ -1,0 +1,34 @@
+@startuml 15-ssd-inscription-eleve
+!include _theme.puml
+!pragma teoz true
+title "Diagramme de séquence système — inscription d'un élève"
+
+autonumber
+actor "Administrateur" as Admin
+participant ":sulungukutu" as Sys
+actor "Parent" as Parent
+
+Admin -> Sys : createStudent(nom, prenom, classe, sexe, dateNaissance, parent?)
+activate Sys
+Sys --> Admin : Eleve (matricule, adhesion STUDENT,\nmot de passe temporaire)
+note right
+  Cree ProfilGlobal + AdhesionEcole(STUDENT)
+  + fiche Eleve + 9 mensualites IMPAYE
+  (montantDu = 25 000 XAF par defaut).
+end note
+deactivate Sys
+
+opt parent fourni ou existant
+  Admin -> Sys : linkParentStudent(parentMembershipId, studentId, lien)
+  activate Sys
+  Sys --> Admin : LienParental (PERE | MERE | TUTEUR)
+  deactivate Sys
+end
+
+Admin -> Sys : inviteUser(email, role TEACHER|PARENT)
+activate Sys
+Sys -> Parent : email d invitation
+Sys --> Admin : InviteResult
+deactivate Sys
+
+@enduml

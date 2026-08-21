@@ -147,7 +147,7 @@ export const InitiateRemotePaymentSchema = z.object({
   studentId:       z.string().uuid(),
   mois:            z.number().int().min(1).max(9),
   anneeScolaire:   z.string().regex(/^\d{4}-\d{4}$/),
-  montant:         z.number().positive('Le montant doit être supérieur à 0'),
+  montant:         z.number().min(0, 'Le montant ne peut pas être négatif'),
   numeroTelephone: z.string().min(8).max(20),
 });
 

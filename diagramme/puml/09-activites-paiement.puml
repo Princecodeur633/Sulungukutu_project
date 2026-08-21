@@ -1,0 +1,51 @@
+@startuml 09-activites-paiement
+!include _theme.puml
+title "Diagramme d'activités — gestion des paiements\nGuichet (admin) et paiement à distance (parent)"
+
+|#AntiqueWhite|Acteur (Admin ou Parent)|
+start
+:Choisir l eleve, le mois et le montant;
+
+if (canal ?) then (guichet)
+  |Administrateur|
+  :Saisir mode (especes, cheque, virement, ...);
+  :Appeler recordManualPayment;
+
+  |#LightBlue|Systeme|
+  :requireSchoolAdmin;
+  :Creer transaction VALIDEE\n(canal GUICHET, numeroRecu);
+  :Recaler montantPaye et statut\n(IMPAYE / PARTIEL / PAYE);
+  :Journaliser PAYMENT_TRANSACTION_CREATED;
+  :Notifier le parent;
+  :Publier PAYMENT_STATUS;
+  stop
+
+else (distance)
+  |Parent|
+  :Saisir le numero Mobile Money;
+  :Appeler initiateRemotePayment;
+
+  |#LightBlue|Systeme|
+  :Creer transaction EN_ATTENTE\n(canal DISTANCE, MOBILE_MONEY_SIMULE);
+  :Appeler la passerelle simulee;
+
+  if (passerelle ?) then (succes)
+    :Passer la transaction a VALIDEE;
+    :Recaler la mensualite;
+    :Notifier parent / eleve;
+    stop
+  else (echec)
+    :Passer a ECHOUEE\n(SOLDE_INSUFFISANT, NUMERO_INVALIDE,\nERREUR_RESEAU, DELAI_EXPIRE);
+    :Mensualite inchangee;
+    stop
+  endif
+endif
+
+legend left
+  Une transaction VALIDEE n est jamais modifiee.
+  Une annulation cree une nouvelle ligne ANNULEE
+  (annule_transaction_id) puis recalcule montantPaye / statut.
+  EXONERE est un statut administratif independant du montant encaisse.
+endlegend
+
+@enduml

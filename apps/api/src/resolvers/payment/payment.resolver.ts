@@ -370,8 +370,23 @@ export const paymentResolvers = {
       // membre du staff (admin/enseignant) peut désormais le faire.
       await requireStudentAccess(ctx, input.studentId, schoolId);
 
+      const existing = await paymentService.getOrCreatePayment(
+        ctx.db, input.studentId, input.mois, input.anneeScolaire
+      );
+      const remaining = Math.max(0, Number(existing.montantDu) - Number(existing.montantPaye));
+      if (remaining <= 0) {
+        throw new GraphQLError('Cette mensualité est déjà soldée.', {
+          extensions: { code: 'BAD_USER_INPUT' },
+        });
+      }
+      const montant = input.montant > 0 ? Math.min(input.montant, remaining) : remaining;
+
       const { transaction, payment } = await remotePaymentGateway.initiateRemotePayment(ctx.db, {
-        ...input,
+        studentId:       input.studentId,
+        mois:            input.mois,
+        anneeScolaire:   input.anneeScolaire,
+        montant,
+        numeroTelephone: input.numeroTelephone,
         schoolId,
       });
 
@@ -383,6 +398,88 @@ export const paymentResolvers = {
       });
 
       return { transaction, payment };
+    },
+  },
+
+  PaymentSummary: {
+    student: async (
+      parent: { student?: unknown; studentId?: string },
+      _: unknown,
+      ctx: GraphQLContext
+    ) => {
+      if (parent.student && typeof parent.student === 'object' && 'membership' in (parent.student as object)) {
+        return parent.student;
+      }
+      const id = (parent.student as { id?: string } | undefined)?.id ?? parent.studentId;
+      if (!id) return null;
+      return ctx.db.query.students.findFirst({
+        where: eq(students.id, id),
+        with: { membership: { with: { profile: true } }, class: true },
+      });
+    },
+  },
+
+  Payment: {
+    recuUrl: (payment: { statut?: string; id?: string }) =>
+      payment.id && ['PAYE', 'EXONERE'].includes(payment.statut ?? '')
+        ? `/pdf/recu/${payment.id}`
+        : null,
+    montantDu: (payment: { montantDu?: unknown }) => Number(payment.montantDu ?? 0),
+    montantPaye: (payment: { montantPaye?: unknown }) => Number(payment.montantPaye ?? 0),
+    datePaiement: (payment: { datePaiement?: Date | string | null }) => {
+      if (!payment.datePaiement) return null;
+      return payment.datePaiement instanceof Date
+        ? payment.datePaiement.toISOString()
+        : String(payment.datePaiement);
+    },
+    student: async (
+      parent: { student?: unknown; studentId?: string },
+      _: unknown,
+      ctx: GraphQLContext
+    ) => {
+      if (parent.student) return parent.student;
+      if (!parent.studentId) return null;
+      return ctx.db.query.students.findFirst({
+        where: eq(students.id, parent.studentId),
+        with: { membership: { with: { profile: true } }, class: true },
+      });
+    },
+    transactions: async (
+      parent: { id?: string; transactions?: unknown[] },
+      _: unknown,
+      ctx: GraphQLContext
+    ) => {
+      if (parent.transactions) return parent.transactions;
+      if (!parent.id) return [];
+      return ctx.db.query.paymentTransactions.findMany({
+        where: eq(paymentTransactions.paymentId, parent.id),
+      });
+    },
+  },
+
+  PaymentTransaction: {
+    recuUrl: (tx: { statut?: string; paymentId?: string }) =>
+      tx.statut === 'VALIDEE' && tx.paymentId ? `/pdf/recu/${tx.paymentId}` : null,
+    payment: async (
+      parent: { payment?: unknown; paymentId?: string },
+      _: unknown,
+      ctx: GraphQLContext
+    ) => {
+      if (parent.payment) return parent.payment;
+      if (!parent.paymentId) return null;
+      return ctx.db.query.payments.findFirst({ where: eq(payments.id, parent.paymentId) });
+    },
+    student: async (
+      parent: { student?: unknown; studentId?: string },
+      _: unknown,
+      ctx: GraphQLContext
+    ) => {
+      if (parent.student) return parent.student;
+      if (!parent.studentId) return null;
+      return ctx.db.query.students.findFirst({
+        where: eq(students.id, parent.studentId),
+        with: { membership: { with: { profile: true } }, class: true },
+      });
     },
   },
 };

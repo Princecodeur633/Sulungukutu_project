@@ -1,0 +1,96 @@
+@startuml 04-composants
+!include _theme.puml
+title "Diagramme de composants — sulungukutu\nUML 2 : composants, interfaces fournies / requises (lollipop)"
+
+skinparam componentStyle uml2
+skinparam nodesep 45
+skinparam ranksep 50
+
+package "Presentation — apps/web" as Web {
+  [Pages App Router\nadmin / teacher / parent\nstudent / superadmin / auth] as Pages
+  [Middleware Next.js\nJWT + roles] as MW
+  [Apollo Client\nqueries / mutations\n/ subscriptions] as Apollo
+  [Stockage jetons\nlocalStorage + cookie\nSameSite=Strict] as Tokens
+}
+
+package "API — apps/api" as ApiPkg {
+  [GraphQL Yoga\n/graphql] as Yoga
+  [Serveur HTTP\n/pdf /export /import\n/health /mail-viewer] as HttpRoutes
+  [WebSocket graphql-ws] as WS
+  [Resolvers metier] as Resolvers
+  [Middleware auth / permissions\n/ rate-limit] as Perms
+  [Services metier] as Services
+  [Drizzle ORM] as Drizzle
+  [node-cron] as Cron
+}
+
+package "Persistance" as Persist {
+  database "PostgreSQL (Neon)" as PG
+}
+
+package "Externes" as Ext {
+  [SMTP Nodemailer] as SMTP
+  [Passerelle Mobile Money\n(simulee)] as MM
+}
+
+interface "IGraphQL" as IGql
+interface "IWebSocket" as IWs
+interface "IHttpBinaire" as IBin
+interface "ISql" as ISql
+interface "ISmtp" as ISmtp
+interface "IPaiementDistant" as IPay
+
+Yoga -- IGql
+WS -- IWs
+HttpRoutes -- IBin
+Drizzle -- ISql
+SMTP -- ISmtp
+MM -- IPay
+
+Pages --> MW
+MW --> Apollo
+Apollo --> Tokens
+Apollo --> IGql : "requiert"
+Apollo --> IWs : "requiert"
+Pages --> IBin : "requiert"
+
+Yoga --> Perms
+Perms --> Resolvers
+Resolvers --> Services
+HttpRoutes --> Perms
+HttpRoutes --> Services
+WS --> Perms
+Cron --> Services
+Services --> Drizzle
+Services --> ISmtp : "requiert"
+Services --> IPay : "requiert"
+Drizzle --> ISql
+
+ISql <.. PG
+
+note right of Services
+  **Services**
+  bulletin.service
+  payment.service
+  remote-payment-gateway
+  audit.service
+  email.service
+  identity.service
+  national-referential
+  export.service
+end note
+
+note bottom of Resolvers
+  auth, school, level, class, subject,
+  student, grade, attendance, payment,
+  bulletin, comms, dashboard,
+  schedule, user
+end note
+
+legend left
+  **Notation UML 2**
+  -- cercle (lollipop) : interface **fournie**
+  fleche vers l interface : interface **requise**
+endlegend
+
+@enduml

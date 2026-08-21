@@ -4,6 +4,7 @@ import { PayMonthModal } from '@/components/ui/PayMonthModal';
 
 import { BULLETINS_BY_STUDENT_QUERY, CHILD_SUMMARY_QUERY, MY_SCHOOL_QUERY, BULLETIN_STATUS_CHANGED_SUBSCRIPTION, PAYMENTS_BY_STUDENT_QUERY } from '@/lib/graphql/queries';
 import { tokenStorage } from '@/lib/apollo/client';
+import { openApiDocument } from '@/lib/api';
 import { useParams } from 'next/navigation';
 import { useState, useMemo } from 'react';
 import { useQuery, useSubscription } from '@apollo/client';
@@ -40,7 +41,7 @@ export default function ChildDetailPage() {
   const studentId  = params.id as string;
   const schoolId   = tokenStorage.getSchoolId() ?? '';
   const { data: mySchoolData } = useQuery(MY_SCHOOL_QUERY, { variables: { schoolId }, skip: !schoolId });
-  const annee      = mySchoolData?.mySchool?.anneeScolaire ?? '2024-2025';
+  const annee      = mySchoolData?.mySchool?.anneeScolaire as string | undefined;
   const [tab, setTab]         = useState<typeof TABS[number]>('Résumé');
   const [trimFilter, setTrim] = useState<string>('T1');
   const [bulletinView, setBulletinView] = useState<'cards'|'compare'>('cards');
@@ -48,10 +49,10 @@ export default function ChildDetailPage() {
 
   const { data, loading, refetch: refetchSummary } = useQuery(CHILD_SUMMARY_QUERY, { variables: { studentId }, skip: !studentId });
   const { data: paymentsData, refetch: refetchPayments } = useQuery(PAYMENTS_BY_STUDENT_QUERY, {
-    variables: { studentId, anneeScolaire: annee }, skip: !studentId,
+    variables: { studentId, anneeScolaire: annee }, skip: !studentId || !annee,
   });
   const { data: bulletinData, refetch: refetchBulletins } = useQuery(BULLETINS_BY_STUDENT_QUERY, {
-    variables: { studentId, anneeScolaire: annee }, skip: !studentId,
+    variables: { studentId, anneeScolaire: annee }, skip: !studentId || !annee,
   });
 
   // Temps réel : le parent voit apparaître le bulletin dès sa publication,
@@ -506,7 +507,7 @@ export default function ChildDetailPage() {
       {/* ── Paiements ── */}
       {tab === 'Paiements' && (
         <div className="card">
-          <h3 className="section-title"><CreditCard size={16} className="text-[var(--warn)]" /> Paiements {annee}</h3>
+          <h3 className="section-title"><CreditCard size={16} className="text-[var(--warn)]" /> Paiements {annee ?? ''}</h3>
           <div className="grid grid-cols-3 md:grid-cols-9 gap-2.5">
             {[1,2,3,4,5,6,7,8,9].map((mois) => {
               const p    = (paymentsData?.paymentsByStudent?.moisDetails ?? []).find((x: any) => x.mois === mois);
@@ -525,7 +526,7 @@ export default function ChildDetailPage() {
                   </div>
                   {paid && p?.recuUrl && (
                     <button
-                      onClick={() => window.open(`${p.recuUrl}?token=${tokenStorage.get()}`, '_blank')}
+                      onClick={() => openApiDocument(p.recuUrl)}
                       title="Télécharger le reçu"
                       className="mt-1 text-[var(--tx-muted)] hover:text-[var(--tx-primary)] transition-colors"
                       style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2 }}
@@ -533,7 +534,7 @@ export default function ChildDetailPage() {
                       <Download size={11} />
                     </button>
                   )}
-                  {!paid && (
+                  {!paid && annee && (
                     <button
                       onClick={() => setPayingMonth(mois)}
                       title="Payer ce mois via Mobile Money"
@@ -561,10 +562,11 @@ export default function ChildDetailPage() {
         isOpen={payingMonth !== null}
         studentId={studentId}
         mois={payingMonth ?? 0}
-        anneeScolaire={annee}
+        anneeScolaire={annee ?? ''}
         montantDu={(() => {
           const p = (paymentsData?.paymentsByStudent?.moisDetails ?? []).find((x: any) => x.mois === payingMonth);
-          return p ? Math.max(0, Number(p.montantDu ?? 0) - Number(p.montantPaye ?? 0)) : 0;
+          if (!p) return 25000;
+          return Math.max(0, Number(p.montantDu ?? 0) - Number(p.montantPaye ?? 0));
         })()}
         onClose={() => setPayingMonth(null)}
         onSuccess={() => { refetchSummary(); refetchPayments(); }}

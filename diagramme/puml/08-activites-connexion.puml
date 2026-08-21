@@ -1,0 +1,51 @@
+@startuml 08-activites-connexion
+!include _theme.puml
+title "Diagramme d'activités — connexion d'un utilisateur"
+
+|#AntiqueWhite|Utilisateur|
+start
+:Saisir identifiant et mot de passe;
+
+|#LightBlue|Systeme sulungukutu|
+:Controler le quota IP\n(10 tentatives / 5 min);
+
+if (quota depasse ?) then (oui)
+  :Rejeter la tentative;
+  |Utilisateur|
+  :Afficher trop de tentatives;
+  stop
+else (non)
+  |Systeme sulungukutu|
+  :Valider le schema d entree;
+  :Resoudre le profil\n(email, telephone, code, matricule);
+
+  if (profil trouve ?) then (non)
+    :Retourner erreur generique;
+    |Utilisateur|
+    :Afficher identifiant ou mot de passe incorrect;
+    stop
+  else (oui)
+    |Systeme sulungukutu|
+    :Comparer le mot de passe (bcrypt);
+
+    if (hash valide ?) then (non)
+      :Retourner erreur generique;
+      |Utilisateur|
+      :Afficher identifiant ou mot de passe incorrect;
+      stop
+    else (oui)
+      |Systeme sulungukutu|
+      :Charger les adhesions ACTIVE;
+      :Determiner le role\n(isSuperAdmin prioritaire);
+      :Signer accessToken (7 j)\net refreshToken (30 j);
+      :Retourner AuthPayload;
+
+      |Utilisateur|
+      :Stocker les jetons;
+      :Acceder au tableau de bord du role;
+      stop
+    endif
+  endif
+endif
+
+@enduml

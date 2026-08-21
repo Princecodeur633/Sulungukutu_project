@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useMutation } from '@apollo/client';
 import { Download, Loader2, FileText } from 'lucide-react';
 import { GENERATE_BULLETIN_PDF_MUTATION } from '@/lib/graphql/queries';
-import { tokenStorage } from '@/lib/apollo/client';
+import { apiDocumentUrl } from '@/lib/api';
 import { useToast } from '@/components/ui/Toast';
 
 interface Props {
@@ -13,8 +13,6 @@ interface Props {
   size?:          'sm' | 'md';
   variant?:       'button' | 'icon';
 }
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 
 export function BulletinDownloadButton({
   bulletinId, pdfUrl, isDownloadable, size = 'md', variant = 'button',
@@ -44,12 +42,7 @@ export function BulletinDownloadButton({
       }
       if (!url) throw new Error('URL PDF manquante');
 
-      // Ajouter le token d'auth dans l'URL
-      const token = tokenStorage.get();
-      const fullUrl = `${API_URL}${url}?token=${encodeURIComponent(token ?? '')}`;
-
-      // Ouvrir dans un nouvel onglet (le navigateur propose Print → Sauver PDF)
-      window.open(fullUrl, '_blank', 'noopener,noreferrer');
+      window.open(apiDocumentUrl(url), '_blank', 'noopener,noreferrer');
     } catch (err: any) {
       addToast({ type: 'error', title: 'Erreur PDF', message: err.message });
     } finally {

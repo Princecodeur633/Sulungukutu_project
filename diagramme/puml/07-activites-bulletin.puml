@@ -1,0 +1,71 @@
+@startuml 07-activites-bulletin
+!include _theme.puml
+title "Diagramme d'activités — génération et publication des bulletins\nUML 2 : actions, décisions (losanges) et couloirs"
+
+|#AntiqueWhite|Administrateur|
+start
+:Selectionner classe, trimestre et annee scolaire;
+:Demander generateBulletins;
+
+|#LightBlue|Systeme sulungukutu|
+:Verifier requireSchoolAdmin(ecole de la classe);
+
+if (classe / matieres OK ?) then (non)
+  :Retourner erreur\n(aucune matiere assignee);
+  stop
+else (oui)
+  :Charger les eleves actifs de la classe;
+  :Charger les affectations pedagogiques;
+
+  while (eleve suivant ?) is (oui)
+    :Supprimer l ancien bulletin du trimestre;
+    :Charger les notes (hors soft-delete);
+
+    if (au moins une note ?) then (oui)
+      :Calculer moyenne par matiere\n(somme / nombre d evaluations);
+      :Calculer points = moyenne x coefficient;
+      :Determiner appreciation;
+      :Inserer bulletin BROUILLON +\nlignes bulletin_details;
+    else (non)
+      :Ignorer l eleve (pas de bulletin);
+    endif
+  endwhile (non)
+
+  :Trier les moyennes generales;
+  :Mettre a jour le rang de chaque bulletin;
+  :Journaliser BULLETIN_GENERATED;
+
+  |Administrateur|
+  :Consulter les brouillons (moyenne, rang, mention);
+
+  if (publier ?) then (non)
+    stop
+  else (oui)
+    |Systeme sulungukutu|
+    :Passer le bulletin a PUBLIE;
+    :Renseigner pdfUrl = /pdf/bulletin/{id};
+    :Notifier parent et eleve (NOTIFICATION + email);
+    :Publier subscription BULLETIN_STATUS;
+    :Journaliser BULLETIN_PUBLISHED;
+
+    |Parent / Eleve|
+    :Demander le telechargement PDF;
+
+    |Systeme sulungukutu|
+    if (statut = PUBLIE ET\n3 mensualites du trimestre\nPAYE ou EXONERE ?) then (oui)
+      :Autoriser le PDF (cache private, no-store);
+      stop
+    else (non)
+      :Refuser le telechargement\n(scolarite du trimestre incomplete);
+      stop
+    endif
+  endif
+endif
+
+legend left
+  Losange : **decision** UML (garde oui / non).
+  Couloirs : responsabilites Administrateur, Systeme, Parent/Eleve.
+  Regle metier : T1 = mois 1-3, T2 = 4-6, T3 = 7-9.
+endlegend
+
+@enduml

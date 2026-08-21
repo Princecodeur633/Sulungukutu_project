@@ -1,0 +1,42 @@
+@startuml 13-ssd-gestion-notes
+!include _theme.puml
+!pragma teoz true
+title "Diagramme de séquence système — gestion des notes"
+
+autonumber
+actor "Enseignant" as Ens
+participant ":sulungukutu" as Sys
+actor "Administrateur" as Admin
+
+Ens -> Sys : gradesByClassSubject(classSubjectId, trimestre)
+activate Sys
+Sys --> Ens : [Note]
+deactivate Sys
+
+Ens -> Sys : bulkCreateGrades(classSubjectId, typeEval, trimestre, [(eleve, valeur)])
+activate Sys
+alt eleves bien inscrits dans la classe
+  Sys --> Ens : [Note] creees
+else eleve hors classe ou supprime
+  Sys --> Ens : erreur BAD_USER_INPUT
+end
+deactivate Sys
+
+Ens -> Sys : updateGrade(id, valeur)
+activate Sys
+Sys --> Ens : Note mise a jour
+deactivate Sys
+
+Admin -> Sys : deleteGrade(id)
+activate Sys
+Sys --> Admin : true (soft delete, deletedAt)
+deactivate Sys
+
+note over Sys
+  Acteurs autorises : TEACHER, ADMIN, SUPER_ADMIN
+  (requireAdminOrTeacher + appartenance a l ecole).
+  Types : DEVOIR, CONTROLE, EXAMEN, INTERRO.
+  Echelle : 0 a 20. Audit : GRADE_CREATED / UPDATED / DELETED.
+end note
+
+@enduml

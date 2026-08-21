@@ -1,0 +1,39 @@
+@startuml 18-communication-bulletin
+!include _theme.puml
+title "Diagramme de communication — génération d'un bulletin de classe"
+
+left to right direction
+skinparam nodesep 55
+skinparam ranksep 50
+
+actor "Administrateur" as Admin
+
+object ":PageBulletins" as Page
+object ":BulletinResolver" as Res
+object ":BulletinService" as Svc
+object ":PostgreSQL" as DB
+object ":AuditService" as Audit
+
+Admin --> Page : "1 : generateBulletins(classe, trimestre)"
+Page --> Res : "2 : mutation generateBulletins"
+Res --> Res : "3 : requireSchoolAdmin(ecole)"
+Res --> Svc : "4 : generateForClass()"
+Svc --> DB : "5 : eleves + class_subjects"
+DB --> Svc : "6 : donnees pedagogiques"
+Svc --> DB : "7 : notes du trimestre"
+DB --> Svc : "8 : [Note]"
+Svc --> Svc : "9 : moyennes, mentions, lignes"
+Svc --> DB : "10 : insert bulletins BROUILLON"
+Svc --> DB : "11 : update rangs"
+Svc --> Res : "12 : resultat (generated, errors)"
+Res --> Audit : "13 : BULLETIN_GENERATED"
+Res --> Page : "14 : [Bulletin]"
+Page --> Admin : "15 : afficher brouillons"
+
+note bottom of Svc
+  moyenne matiere = somme(valeurs) / nb evaluations
+  moyenne generale = totalPoints / totalCoefficients
+  mention : EXCELLENT (>=16) ... INSUFFISANT (<8)
+end note
+
+@enduml

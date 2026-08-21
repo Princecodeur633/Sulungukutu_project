@@ -412,6 +412,7 @@ type Grade {
 # ------ Attendance (Présence) ------
 type Attendance {
   id: ID!
+  studentId: ID
   student: Student!
   classSubject: ClassSubject!
   date: String!

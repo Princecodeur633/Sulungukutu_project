@@ -105,16 +105,12 @@ const resolvers = {
   },
 
   // Field resolvers
-  Class:    classResolvers.Class,
-  Bulletin: bulletinResolvers.Bulletin,
-  Payment: {
-    recuUrl: (payment: any) =>
-      ['PAYE', 'EXONERE'].includes(payment.statut) ? `/pdf/recu/${payment.id}` : null,
-  },
-  PaymentTransaction: {
-    recuUrl: (tx: any) =>
-      tx.statut === 'VALIDEE' && tx.paymentId ? `/pdf/recu/${tx.paymentId}` : null,
-  },
+  Class:      classResolvers.Class,
+  Bulletin:   bulletinResolvers.Bulletin,
+  Attendance: attendanceResolvers.Attendance,
+  PaymentSummary:     paymentResolvers.PaymentSummary,
+  Payment:            paymentResolvers.Payment,
+  PaymentTransaction: paymentResolvers.PaymentTransaction,
 
   Subscription: {
     notificationAdded: {

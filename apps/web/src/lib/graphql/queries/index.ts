@@ -268,6 +268,16 @@ export const CREATE_STUDENT_MUTATION = gql`
   }
 `;
 
+export const LINK_PARENT_STUDENT_MUTATION = gql`
+  mutation LinkParentStudent($input: LinkParentStudentInput!) {
+    linkParentStudent(input: $input) {
+      id
+      lien
+      parent { id code profile { nom prenom email phone } }
+    }
+  }
+`;
+
 export const STUDENT_STATS_QUERY = gql`
   query StudentStats($studentId: ID!, $anneeScolaire: String!) {
     studentStats(studentId: $studentId, anneeScolaire: $anneeScolaire) {
@@ -364,6 +374,7 @@ export const ATTENDANCE_BY_CLASS_SUBJECT_QUERY = gql`
   query AttendanceByClassSubject($classSubjectId: ID!, $date: String!) {
     attendanceByClassSubject(classSubjectId: $classSubjectId, date: $date) {
       id
+      studentId
       statut
       motif
       date

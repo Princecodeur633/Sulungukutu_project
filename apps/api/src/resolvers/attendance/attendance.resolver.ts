@@ -1,13 +1,28 @@
-import { eq, and, count } from 'drizzle-orm';
-import { attendances, classSubjects, notifications, parentStudents, students, schools } from '../../db/schema';
+import { eq, and, count, isNull, inArray } from 'drizzle-orm';
+import { attendances, classSubjects, notifications, parentStudents, students, schools, schoolMemberships } from '../../db/schema';
 import { requireAdminOrTeacher, requireSchoolMember } from '../../middleware/permissions';
 import { MarkAttendanceSchema } from '../../utils/validators/schemas';
 import { auditService } from '../../services/audit.service';
 import { pubsub }       from '../../pubsub';
 import { GraphQLError } from 'graphql';
-import type { StudentData } from '../../types/domain';
 import type { GraphQLContext } from '../../middleware/auth';
 import { emailService } from '../../services/email.service';
+
+const attendanceRelations = {
+  student:      { with: { membership: { with: { profile: true } } } },
+  markedBy:     { with: { profile: true } },
+  classSubject: { with: { subject: true } },
+} as const;
+
+async function loadAttendancesByIds(ctx: GraphQLContext, ids: string[]) {
+  if (ids.length === 0) return [];
+  const rows = await ctx.db.query.attendances.findMany({
+    where: inArray(attendances.id, ids),
+    with:  attendanceRelations,
+  });
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  return ids.map((id) => byId.get(id)).filter((row): row is NonNullable<typeof row> => Boolean(row));
+}
 
 export const attendanceResolvers = {
   Query: {
@@ -28,7 +43,8 @@ export const attendanceResolvers = {
       return ctx.db.query.attendances.findMany({
         where: and(
           eq(attendances.classSubjectId, args.classSubjectId),
-          eq(attendances.date, args.date.split('T')[0])
+          eq(attendances.date, args.date.split('T')[0]),
+          isNull(attendances.deletedAt),
         ),
         with: {
           student: { with: { membership: { with: { profile: true } } } },
@@ -118,7 +134,12 @@ export const attendanceResolvers = {
       ctx: GraphQLContext
     ) => {
       const user  = requireAdminOrTeacher(ctx);
-      const input = MarkAttendanceSchema.parse(args.input);
+      let input;
+      try {
+        input = MarkAttendanceSchema.parse(args.input);
+      } catch {
+        throw new GraphQLError('Données de présence invalides.', { extensions: { code: 'BAD_USER_INPUT' } });
+      }
       const date  = input.date.split('T')[0];
 
       // Dérive l'école depuis la classe/matière ciblée puis vérifie que
@@ -127,13 +148,25 @@ export const attendanceResolvers = {
       // SUPER_ADMIN non rattaché à une école.
       const targetClassSubject = await ctx.db.query.classSubjects.findFirst({
         where: eq(classSubjects.id, input.classSubjectId),
-        with: { class: true },
+        with: { class: true, subject: true },
       });
       if (!targetClassSubject) {
         throw new GraphQLError('Classe/matière introuvable', { extensions: { code: 'NOT_FOUND' } });
       }
       const targetSchoolId = (targetClassSubject as any).class.schoolId;
       requireSchoolMember(ctx, targetSchoolId);
+
+      if (!user.membershipId) {
+        throw new GraphQLError(
+          'Impossible d\'enregistrer les présences : compte non rattaché à un établissement.',
+          { extensions: { code: 'FORBIDDEN' } }
+        );
+      }
+
+      const school = await ctx.db.query.schools.findFirst({
+        where: eq(schools.id, targetSchoolId),
+      });
+      const subjectName = (targetClassSubject as any).subject?.nom ?? 'cours';
 
       const results = [];
       const notificationsToCreate = [];
@@ -144,7 +177,7 @@ export const attendanceResolvers = {
           where: and(
             eq(attendances.studentId,      record.studentId),
             eq(attendances.classSubjectId, input.classSubjectId),
-            eq(attendances.date,           date)
+            eq(attendances.date,           date),
           ),
         });
 
@@ -152,7 +185,13 @@ export const attendanceResolvers = {
         if (existing) {
           [att] = await ctx.db
             .update(attendances)
-            .set({ statut: record.statut, motif: record.motif ?? null, updatedAt: new Date() })
+            .set({
+              statut:    record.statut,
+              motif:     record.motif ?? null,
+              deletedAt: null,
+              isActive:  true,
+              updatedAt: new Date(),
+            })
             .where(eq(attendances.id, existing.id))
             .returning();
         } else {
@@ -163,70 +202,66 @@ export const attendanceResolvers = {
               classSubjectId: input.classSubjectId,
               date,
               statut:         record.statut,
-              motif:          record.motif,
-              markedById:     user.membershipId!,
+              motif:          record.motif ?? null,
+              markedById:     user.membershipId,
             })
             .returning();
         }
+        if (!att?.id) continue;
         results.push(att);
 
-        // Notifier les parents si ABSENT
         if (record.statut === 'ABSENT' || record.statut === 'RETARD') {
-          const parentLinks = await ctx.db.query.parentStudents.findMany({
-            where: eq(parentStudents.studentId, record.studentId),
-            with: {
-              parent: { with: { profile: true } },
-              student: { with: { membership: { with: { profile: true } } } },
-            },
-          });
-
-          const cs = await ctx.db.query.classSubjects.findFirst({
-            where: eq(classSubjects.id, input.classSubjectId),
-            with: { subject: true },
-          });
-
-          for (const link of parentLinks) {
-            const studentName = `${(link as any).student.membership.profile.prenom} ${(link as any).student.membership.profile.nom}`; // eslint-disable-line @typescript-eslint/no-explicit-any
-            const subjectName = (cs as any)?.subject?.nom ?? 'cours'; // eslint-disable-line @typescript-eslint/no-explicit-any
-            const statutLabel = record.statut === 'ABSENT' ? 'absent(e)' : 'en retard';
-
-            notificationsToCreate.push({
-              profileId: (link as any).parent.profile.id, // eslint-disable-line @typescript-eslint/no-explicit-any
-              schoolId:  user.schoolId ?? '',
-              titre:     `⚠️ ${record.statut === 'ABSENT' ? 'Absence' : 'Retard'} signalé(e)`,
-              message:   `${studentName} a été marqué(e) ${statutLabel} en ${subjectName} le ${new Date(date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}.`,
-              type:      'ABSENCE' as const,
+          try {
+            const parentLinks = await ctx.db.query.parentStudents.findMany({
+              where: eq(parentStudents.studentId, record.studentId),
+              with: {
+                parent: { with: { profile: true } },
+                student: { with: { membership: { with: { profile: true } } } },
+              },
             });
 
-            // Email au parent si absence (non bloquant)
-            if (record.statut === 'ABSENT') {
-              const parentEmail = (link as any).parent.profile.email; // eslint-disable-line @typescript-eslint/no-explicit-any
-              if (parentEmail) {
-                const school = await ctx.db.query.schools.findFirst({
-                  where: (s, { eq }) => eq(s.id, user.schoolId ?? ''),
-                });
+            for (const link of parentLinks) {
+              const parentProfile = (link as any).parent?.profile;
+              if (!parentProfile?.id) continue;
+
+              const studentName = `${(link as any).student?.membership?.profile?.prenom ?? ''} ${(link as any).student?.membership?.profile?.nom ?? ''}`.trim() || 'Élève';
+              const statutLabel = record.statut === 'ABSENT' ? 'absent(e)' : 'en retard';
+
+              notificationsToCreate.push({
+                profileId: parentProfile.id,
+                schoolId:  targetSchoolId,
+                titre:     `⚠️ ${record.statut === 'ABSENT' ? 'Absence' : 'Retard'} signalé(e)`,
+                message:   `${studentName} a été marqué(e) ${statutLabel} en ${subjectName} le ${new Date(date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}.`,
+                type:      'ABSENCE' as const,
+              });
+
+              if (record.statut === 'ABSENT' && parentProfile.email) {
                 emailService.sendAbsenceNotification({
-                  to:             parentEmail,
-                  parentPrenom:   (link as any).parent.profile.prenom ?? 'Parent', // eslint-disable-line @typescript-eslint/no-explicit-any
+                  to:             parentProfile.email,
+                  parentPrenom:   parentProfile.prenom ?? 'Parent',
                   studentPrenom:  studentName,
-                  date:           date,
+                  date,
                   matiere:        subjectName,
                   schoolName:     school?.nom ?? 'sulungukutu',
                 }).catch((err) => console.error('[Email absence]', err));
               }
             }
+          } catch (err) {
+            console.error('[Attendance] notification parent ignorée :', err);
           }
         }
       }
 
-      // Envoyer toutes les notifications d'un coup
       if (notificationsToCreate.length > 0) {
-        const inserted = await ctx.db.insert(notifications).values(notificationsToCreate).returning();
-        // Publier chaque notification via subscription
-        for (const notif of inserted) {
-          pubsub.publish('NOTIFICATION_ADDED', notif.profileId, {
-            notificationAdded: notif,
-          });
+        try {
+          const inserted = await ctx.db.insert(notifications).values(notificationsToCreate).returning();
+          for (const notif of inserted) {
+            pubsub.publish('NOTIFICATION_ADDED', notif.profileId, {
+              notificationAdded: notif,
+            });
+          }
+        } catch (err) {
+          console.error('[Attendance] notifications non envoyées :', err);
         }
       }
 
@@ -239,14 +274,18 @@ export const attendanceResolvers = {
         description: `Présences marquées : ${input.records.length} élèves`,
       });
 
-      // Publier l'événement pour les subscriptions WebSocket
-      for (const att of results) {
+      const hydrated = await loadAttendancesByIds(
+        ctx,
+        results.map((att) => att.id).filter(Boolean)
+      );
+
+      for (const att of hydrated) {
         pubsub.publish('ATTENDANCE_UPDATED', input.classSubjectId, {
           attendanceUpdated: att,
         });
       }
 
-      return results;
+      return hydrated;
     },
 
     updateAttendance: async (
@@ -281,7 +320,46 @@ export const attendanceResolvers = {
         newValue:    { statut: args.input.statut },
       });
 
-      return updated;
+      const [hydrated] = await loadAttendancesByIds(ctx, [updated.id]);
+      return hydrated ?? updated;
+    },
+  },
+
+  Attendance: {
+    date: (parent: { date?: string | Date | null }) => {
+      if (!parent.date) return null;
+      if (typeof parent.date === 'string') return parent.date.slice(0, 10);
+      if (parent.date instanceof Date && !Number.isNaN(parent.date.getTime())) {
+        const y = parent.date.getFullYear();
+        const m = String(parent.date.getMonth() + 1).padStart(2, '0');
+        const d = String(parent.date.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+      }
+      return String(parent.date).slice(0, 10);
+    },
+    student: async (parent: { student?: unknown; studentId?: string }, _: unknown, ctx: GraphQLContext) => {
+      if (parent.student) return parent.student;
+      if (!parent.studentId) return null;
+      return ctx.db.query.students.findFirst({
+        where: eq(students.id, parent.studentId),
+        with: { membership: { with: { profile: true } } },
+      });
+    },
+    classSubject: async (parent: { classSubject?: unknown; classSubjectId?: string }, _: unknown, ctx: GraphQLContext) => {
+      if (parent.classSubject) return parent.classSubject;
+      if (!parent.classSubjectId) return null;
+      return ctx.db.query.classSubjects.findFirst({
+        where: eq(classSubjects.id, parent.classSubjectId),
+        with: { subject: true, class: true },
+      });
+    },
+    markedBy: async (parent: { markedBy?: unknown; markedById?: string }, _: unknown, ctx: GraphQLContext) => {
+      if (parent.markedBy) return parent.markedBy;
+      if (!parent.markedById) return null;
+      return ctx.db.query.schoolMemberships.findFirst({
+        where: eq(schoolMemberships.id, parent.markedById),
+        with: { profile: true },
+      });
     },
   },
 };

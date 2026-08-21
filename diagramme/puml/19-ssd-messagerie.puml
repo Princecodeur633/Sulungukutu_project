@@ -1,0 +1,30 @@
+@startuml 19-ssd-messagerie
+!include _theme.puml
+!pragma teoz true
+title "Diagramme de séquence système — messagerie interne et annonces"
+
+autonumber
+actor "Expediteur\n(Admin / Enseignant / Parent / Eleve)" as Exp
+participant ":sulungukutu" as Sys
+actor "Destinataire" as Dest
+
+Exp -> Sys : sendMessage(schoolId, receiverId, sujet, contenu)
+activate Sys
+Sys --> Exp : Message
+Sys -> Dest : notification temps reel messageReceived\n(filtre : receiverId = abonne)
+deactivate Sys
+
+Dest -> Sys : markMessageAsRead(id)
+activate Sys
+Sys --> Dest : Message (lu = true)
+deactivate Sys
+
+== Annonce (admin) ==
+actor "Administrateur" as Admin
+Admin -> Sys : createAnnouncement(schoolId, titre, contenu, cible)
+activate Sys
+Sys --> Admin : Annonce
+Sys -> Dest : announcementPublished (cible ALL | PARENTS | TEACHERS | STUDENTS | ADMINS)
+deactivate Sys
+
+@enduml
